@@ -1,0 +1,27 @@
+# Android/Gradle artifacts
+/.gradle/
+/.gradle-local/
+/.gradle-offline/
+/.gradle-run/
+/.gradle-run2/
+/.gradle-run3/
+/.temp-build-run/
+/android-tmp/
+/tmp/
+/build/
+/app/build/
+/local.properties
+/.idea/
+/.cxx/
+*.iml
+*.apk
+*.ap_
+*.aab
+*.jks
+*.keystore
+/captures/
+
+# Misc IDE files
+*.swp
+*.swo
+*~
