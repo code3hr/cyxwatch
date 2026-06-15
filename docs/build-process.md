@@ -78,6 +78,25 @@ Latest run on 2026-06-14:
   - creates/updates GitHub release,
   - attaches `cyxwatch-<tag>-release-unsigned.apk`.
 
+Note:
+
+- `app-release-unsigned.apk` is intentionally unsigned for GitHub attachment and should not be installed directly.
+- For local side-load testing, build the signed debug variant (`assembleDebug`) or sign the release APK with a local keystore.
+
+Example local ad-hoc signing (debug keystore):
+
+```powershell
+$env:JAVA_HOME='D:\ProgramFiles 64\jbr'
+$env:PATH='C:\Users\chick\AppData\Local\Android\Sdk\build-tools\36.1.0;C:\ProgramFiles 64\bin;' + $env:PATH
+$env:ANDROID_HOME='C:\Users\chick\AppData\Local\Android\Sdk'
+
+& "$env:ANDROID_HOME\\build-tools\\36.1.0\\apksigner.bat" sign `
+  --ks "$env:USERPROFILE\\.android\\debug.keystore" `
+  --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android `
+  --out 'D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.1-release-debugsigned.apk' `
+  'D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.1-release-unsigned.apk'
+```
+
 ## Cleanup sequence
 
 Use this after repeated lock failures:
