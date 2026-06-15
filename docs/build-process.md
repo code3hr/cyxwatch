@@ -51,8 +51,16 @@ Use `-PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-rootbuild'` whenever
 
 ## Release APK installability
 
-- `app-release-unsigned.apk` is intentionally unsigned and is not valid for direct installation on a device.
-- For device tests, either install `app-debug.apk` or sign the release locally and install the signed file.
+- `app-release-unsigned.apk` is only produced when no signing key is available.
+- If release signing credentials are configured, `assembleRelease` outputs a signed APK that is installable.
+- If no release credentials exist, Gradle falls back to local test signing with `~/.android/debug.keystore`.
+
+Release signing inputs (optional):
+
+- `CYXWATCH_RELEASE_KEYSTORE_PATH` / `CYXWATCH_KEYSTORE_PATH` (or `cyxwatch.release.keystore.path`)
+- `CYXWATCH_RELEASE_KEYSTORE_PASSWORD` / `CYXWATCH_KEYSTORE_PASSWORD` (or `cyxwatch.release.keystore.password`)
+- `CYXWATCH_RELEASE_KEY_ALIAS` / `CYXWATCH_KEY_ALIAS` (or `cyxwatch.release.keystore.alias`)
+- `CYXWATCH_RELEASE_KEY_PASSWORD` / `CYXWATCH_KEY_PASSWORD` (or `cyxwatch.release.key.password`)
 
 Example (PowerShell, debug keystore):
 ```powershell
@@ -97,10 +105,11 @@ Latest run on 2026-06-14:
   - `./gradlew assembleDebug`
   - `./gradlew assembleRelease`
   - Upload `app-debug.apk` and `app-release-unsigned.apk` as workflow artifacts.
+  - If release signing is available on CI, `assembleRelease` produces signed `app-release.apk`.
 - On any tag push (for example `0.0.2` or `v0.0.2`) **or manual workflow dispatch with `run_release=true`**:
   - rebuilds release artifact,
   - creates/updates GitHub release,
-  - attaches `cyxwatch-<tag>-release-unsigned.apk`.
+  - uploads `cyxwatch-<tag>-release.apk` when signed, otherwise `cyxwatch-<tag>-release-unsigned.apk`.
 
 ## Cleanup sequence
 

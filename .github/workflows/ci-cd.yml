@@ -91,17 +91,73 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
 
+      - name: Prepare release keystore
+        run: |
+          if [ -n "${{ secrets.CYXWATCH_RELEASE_KEYSTORE_BASE64 }}" ]; then
+            mkdir -p "$RUNNER_TEMP/cyxwatch-release-keys"
+            echo "${{ secrets.CYXWATCH_RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/cyxwatch-release-keys/cyxwatch-release.keystore"
+            echo "CYXWATCH_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/cyxwatch-release-keys/cyxwatch-release.keystore" >> "$GITHUB_ENV"
+            echo "CYXWATCH_RELEASE_KEYSTORE_PASSWORD=${{ secrets.CYXWATCH_RELEASE_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "CYXWATCH_RELEASE_KEY_ALIAS=${{ secrets.CYXWATCH_RELEASE_KEY_ALIAS }}" >> "$GITHUB_ENV"
+            echo "CYXWATCH_RELEASE_KEY_PASSWORD=${{ secrets.CYXWATCH_RELEASE_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          else
+            mkdir -p "$HOME/.android"
+            if [ ! -f "$HOME/.android/debug.keystore" ]; then
+              keytool -genkeypair -v \
+                -keystore "$HOME/.android/debug.keystore" \
+                -storetype PKCS12 \
+                -alias androiddebugkey \
+                -keypass android \
+                -storepass android \
+                -dname "CN=CyxWatch, OU=Development, O=CyxWatch, L=, S=, C=US" \
+                -keyalg RSA -keysize 2048 -validity 10000
+            fi
+          fi
+
       - name: Rebuild release APK
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Collect release artifact
+      - name: Collect release artifacts
         run: |
           mkdir -p .artifacts
-          cp app/build/outputs/apk/release/app-release-unsigned.apk .artifacts/cyxwatch-${{ github.ref_name }}-release-unsigned.apk
+          RELEASE_APK=""
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            RELEASE_APK=app/build/outputs/apk/release/app-release.apk
+          elif [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            RELEASE_APK=app/build/outputs/apk/release/app-release-unsigned.apk
+          else
+            echo "No release APK found"
+            ls -R app/build/outputs/apk/release || true
+            exit 1
+          fi
+          if echo "$RELEASE_APK" | grep -q "unsigned"; then
+            cp "$RELEASE_APK" ".artifacts/cyxwatch-${{ github.ref_name }}-release-unsigned.apk"
+            echo "CYXWATCH_RELEASE_SIGNED=false" >> "$GITHUB_ENV"
+            echo "CYXWATCH_RELEASE_ARTIFACT_PATH=.artifacts/cyxwatch-${{ github.ref_name }}-release-unsigned.apk" >> "$GITHUB_ENV"
+          else
+            cp "$RELEASE_APK" ".artifacts/cyxwatch-${{ github.ref_name }}-release.apk"
+            echo "CYXWATCH_RELEASE_SIGNED=true" >> "$GITHUB_ENV"
+            echo "CYXWATCH_RELEASE_ARTIFACT_PATH=.artifacts/cyxwatch-${{ github.ref_name }}-release.apk" >> "$GITHUB_ENV"
+          fi
+          echo "CYXWATCH_RELEASE_APK=$RELEASE_APK" >> "$GITHUB_ENV"
+
+      - name: Upload signed release APK
+        if: env.CYXWATCH_RELEASE_SIGNED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyxwatch-release-signed-apk
+          path: .artifacts/cyxwatch-${{ github.ref_name }}-release.apk
+
+      - name: Upload release unsigned APK
+        if: env.CYXWATCH_RELEASE_SIGNED != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyxwatch-release-unsigned-apk
+          path: .artifacts/cyxwatch-${{ github.ref_name }}-release-unsigned.apk
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: CyxWatch ${{ github.ref_name }}
-          files: .artifacts/cyxwatch-${{ github.ref_name }}-release-unsigned.apk
+          files: ${{ env.CYXWATCH_RELEASE_ARTIFACT_PATH }}
           generate_release_notes: true

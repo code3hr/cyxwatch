@@ -3,6 +3,34 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+import java.io.File
+
+val releaseKeystorePath = System.getenv("CYXWATCH_RELEASE_KEYSTORE_PATH")
+    ?: System.getenv("CYXWATCH_KEYSTORE_PATH")
+    ?: project.findProperty("cyxwatch.release.keystore.path")?.toString()
+
+val releaseKeystorePassword = System.getenv("CYXWATCH_RELEASE_KEYSTORE_PASSWORD")
+    ?: System.getenv("CYXWATCH_KEYSTORE_PASSWORD")
+    ?: project.findProperty("cyxwatch.release.keystore.password")?.toString()
+
+val releaseKeystoreAlias = System.getenv("CYXWATCH_RELEASE_KEY_ALIAS")
+    ?: System.getenv("CYXWATCH_KEY_ALIAS")
+    ?: project.findProperty("cyxwatch.release.keystore.alias")?.toString()
+
+val releaseKeyPassword = System.getenv("CYXWATCH_RELEASE_KEY_PASSWORD")
+    ?: System.getenv("CYXWATCH_KEY_PASSWORD")
+    ?: project.findProperty("cyxwatch.release.key.password")?.toString()
+
+val releaseKeystoreFile = releaseKeystorePath?.trim()?.let { File(it) }
+val hasExplicitReleaseKeystore = releaseKeystoreFile?.exists() == true &&
+    !releaseKeystorePath.isNullOrBlank() &&
+    !releaseKeystorePassword.isNullOrBlank() &&
+    !releaseKeystoreAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank()
+
+val debugKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
+val useDebugFallbackSigning = !hasExplicitReleaseKeystore && debugKeystore.exists()
+
 android {
     namespace = "com.cyxwatch.app"
     compileSdk = 34
@@ -16,9 +44,34 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasExplicitReleaseKeystore) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeystoreAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+
+        if (useDebugFallbackSigning) {
+            create("releaseDebugFallback") {
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = when {
+                hasExplicitReleaseKeystore -> signingConfigs.getByName("release")
+                useDebugFallbackSigning -> signingConfigs.getByName("releaseDebugFallback")
+                else -> null
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
