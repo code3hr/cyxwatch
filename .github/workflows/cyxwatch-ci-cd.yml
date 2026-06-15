@@ -75,15 +75,24 @@ jobs:
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
       - name: Run tests before release
-        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --no-daemon
       - name: Prepare release artifact
         run: |
           mkdir -p release-artifacts
-          cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/cyxwatch-${{ steps.release_meta.outputs.version }}-beta.apk
+          if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            cp app/build/outputs/apk/release/app-release-unsigned.apk release-artifacts/cyxwatch-${{ steps.release_meta.outputs.version }}-release-unsigned.apk
+          elif [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk release-artifacts/cyxwatch-${{ steps.release_meta.outputs.version }}-release.apk
+          elif [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/cyxwatch-${{ steps.release_meta.outputs.version }}-beta.apk
+          else
+            echo "No APK artifact found."
+            exit 1
+          fi
       - name: Build summary
         run: |
           echo "tag=${{ steps.release_meta.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "artifact=release-artifacts/cyxwatch-${{ steps.release_meta.outputs.version }}-beta.apk" >> "$GITHUB_STEP_SUMMARY"
+          echo "artifact=release-artifacts/" >> "$GITHUB_STEP_SUMMARY"
       - name: Create GitHub release
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
