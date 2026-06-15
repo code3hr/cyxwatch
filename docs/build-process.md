@@ -65,7 +65,7 @@ Release signing inputs (optional):
 Example (PowerShell, debug keystore):
 ```powershell
 $env:JAVA_HOME='D:\ProgramFiles 64\jbr'
-$out='D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.2-release-debugsigned.apk'
+$out='D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.3-release-debugsigned.apk'
 $input='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build\outputs\apk\release\app-release-unsigned.apk'
 
 ./gradlew.bat assembleRelease --no-daemon -PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build'
@@ -78,7 +78,7 @@ $input='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build\outputs\apk\rel
 
 If `adb` is in PATH:
 ```powershell
-adb install -r -d -g D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.2-release-debugsigned.apk
+adb install -r -d -g D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.3-release-debugsigned.apk
 ```
 
 ## Current observed outcomes
@@ -96,7 +96,7 @@ Latest run on 2026-06-14:
 
 ## CI/CD release flow
 
-- Current tag target: `0.0.2`.
+- Current tag target: `0.0.3`.
 - GitHub Actions workflow: `.github/workflows/ci-cd.yml`.
 - On every push to `main` and pull request:
   - `./gradlew test`
@@ -104,9 +104,9 @@ Latest run on 2026-06-14:
   - `./gradlew :app:compileDebugAndroidTestKotlin`
   - `./gradlew assembleDebug`
   - `./gradlew assembleRelease`
-  - Upload `app-debug.apk` and `app-release-unsigned.apk` as workflow artifacts.
+  - Upload `app-debug.apk` and the release output (signed if configured, otherwise unsigned) as workflow artifacts.
   - If release signing is available on CI, `assembleRelease` produces signed `app-release.apk`.
-- On any tag push (for example `0.0.2` or `v0.0.2`) **or manual workflow dispatch with `run_release=true`**:
+- On any tag push (for example `0.0.3` or `v0.0.3`) **or manual workflow dispatch with `run_release=true`**:
   - rebuilds release artifact,
   - creates/updates GitHub release,
   - uploads `cyxwatch-<tag>-release.apk` when signed, otherwise `cyxwatch-<tag>-release-unsigned.apk`.
