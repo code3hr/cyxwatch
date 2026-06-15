@@ -13,6 +13,11 @@
 /local.properties
 /.idea/
 /.cxx/
+/remote-active/
+/remote-clone/
+/temp_remote_pull/
+/temp_remote_pull2/
+/workfix/
 *.iml
 *.apk
 *.ap_
