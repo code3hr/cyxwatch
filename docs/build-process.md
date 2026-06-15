@@ -49,6 +49,30 @@ If you hit `.android/debug.keystore.lock` `Access is denied`, run with `ANDROID_
 
 Use `-PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-rootbuild'` whenever you hit repository write/access-denied errors under `D:\Dev\cyxwatch\app\build` or `D:\Dev\cyxwatch\build`.
 
+## Release APK installability
+
+- `app-release-unsigned.apk` is intentionally unsigned and is not valid for direct installation on a device.
+- For device tests, either install `app-debug.apk` or sign the release locally and install the signed file.
+
+Example (PowerShell, debug keystore):
+```powershell
+$env:JAVA_HOME='D:\ProgramFiles 64\jbr'
+$out='D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.1-release-debugsigned.apk'
+$input='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build\outputs\apk\release\app-release-unsigned.apk'
+
+./gradlew.bat assembleRelease --no-daemon -PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build'
+
+& 'C:\Users\chick\AppData\Local\Android\Sdk\build-tools\36.1.0\apksigner.bat' sign `
+  --ks "$env:USERPROFILE\.android\debug.keystore" `
+  --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android `
+  --out $out $input
+```
+
+If `adb` is in PATH:
+```powershell
+adb install -r -d -g D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.1-release-debugsigned.apk
+```
+
 ## Current observed outcomes
 
 Latest run on 2026-06-14:
@@ -73,29 +97,10 @@ Latest run on 2026-06-14:
   - `./gradlew assembleDebug`
   - `./gradlew assembleRelease`
   - Upload `app-debug.apk` and `app-release-unsigned.apk` as workflow artifacts.
-- On any tag push (for example `0.0.1` or `v0.0.1`):
+- On any tag push (for example `0.0.1` or `v0.0.1`) **or manual workflow dispatch with `run_release=true`**:
   - rebuilds release artifact,
   - creates/updates GitHub release,
   - attaches `cyxwatch-<tag>-release-unsigned.apk`.
-
-Note:
-
-- `app-release-unsigned.apk` is intentionally unsigned for GitHub attachment and should not be installed directly.
-- For local side-load testing, build the signed debug variant (`assembleDebug`) or sign the release APK with a local keystore.
-
-Example local ad-hoc signing (debug keystore):
-
-```powershell
-$env:JAVA_HOME='D:\ProgramFiles 64\jbr'
-$env:PATH='C:\Users\chick\AppData\Local\Android\Sdk\build-tools\36.1.0;C:\ProgramFiles 64\bin;' + $env:PATH
-$env:ANDROID_HOME='C:\Users\chick\AppData\Local\Android\Sdk'
-
-& "$env:ANDROID_HOME\\build-tools\\36.1.0\\apksigner.bat" sign `
-  --ks "$env:USERPROFILE\\.android\\debug.keystore" `
-  --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android `
-  --out 'D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.1-release-debugsigned.apk' `
-  'D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.1-release-unsigned.apk'
-```
 
 ## Cleanup sequence
 

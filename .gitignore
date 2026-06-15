@@ -17,8 +17,6 @@
 *.apk
 *.ap_
 *.aab
-*.jks
-*.keystore
 /captures/
 
 # Misc IDE files

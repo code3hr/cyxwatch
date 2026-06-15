@@ -61,6 +61,20 @@ What it **does not** do:
 - replace OS security controls,
 - provide anonymity or shield browsing from your network provider.
 
+## Positioning and comparable tools
+
+CyxWatch is a local observability layer, not a private VPN product. It is closest to a monitoring dashboard and policy audit tool.
+
+- It is **not** a malware scanner or app reputation checker.
+- It is **not** a proxy/VPN privacy product.
+- It is **not** an endpoint-exfiltration blocker.
+- It is intended to provide evidence-first visibility for: app activity context, declared sensitive permissions, and local network totals.
+
+For teams evaluating alternatives:
+- NetGuard/NoRoot firewall tools focus on packet filtering and app-level network blocking.
+- GlassWire-like tools often focus on traffic totals and connection summaries.
+- CyxWatch focuses on local timeline + permission-state changes and score/evidence explainability.
+
 ## Network modes
 
 ### Basic mode

@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,6 +45,33 @@ fun UsageAccessScreen(
             text = "CyxWatch works locally on-device and needs Usage Access to read app activity.",
             style = MaterialTheme.typography.bodyMedium,
         )
+
+        Spacer(modifier = Modifier.size(12.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+            ),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("What this permission is for:", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "It lets CyxWatch read local app-activity windows so it can show app timeline evidence.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "Important: this app is for observability only. It does not run as a private tunnel or hide traffic.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "No data is uploaded; all analysis is on-device.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
 
         if (hasEverDenied && checkCount > 0) {
             Spacer(modifier = Modifier.size(8.dp))

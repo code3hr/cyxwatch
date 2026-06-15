@@ -325,11 +325,11 @@ Statuses are `todo`, `in_progress`, `blocked`, and `done`.
 
 ## Current Phase
 
-- Current status: MVP baseline has completed usage collection and scoring rule expansion.
+- Current status: MVP baseline with monitor-style UX and release pipeline are complete.
 - CYX-301, CYX-302, CYX-303, CYX-401, and CYX-402 are implemented and verified with `testDebugUnitTest`, `assembleDebug`, and service-lifecycle lint/build checks.
 - CYX-501, CYX-502, CYX-601, CYX-602, CYX-701, and CYX-702 are implemented.
 - CYX-801 and CYX-802 are implemented and verification tasks have been run for new checks.
-- CYX-901, CYX-902 and CYX-905 are implemented, with CYX-904 and CYX-906 now active.
+- CYX-901, CYX-902, CYX-903, CYX-905, CYX-906 and CYX-907 are implemented.
 
 ## Epic 9 - UX Polish and Safety Feedback
 
@@ -370,7 +370,10 @@ Statuses are `todo`, `in_progress`, `blocked`, and `done`.
     - `docs`
   - Acceptance:
     - Report copy and flow are considered production-ready by peer review.
-  - Status: `in_progress`
+  - Status: `done`
+  - Progress:
+    - Removed duplicate dashboard scroll controls and kept a single persistent scroll navigation affordance.
+    - Expanded report copy around local-vs-network observability boundaries.
 
 - CYX-904: Add monitor-level dashboard surface
   - Scope:
@@ -384,10 +387,11 @@ Statuses are `todo`, `in_progress`, `blocked`, and `done`.
   - Acceptance:
     - Summary opens with a clear monitor-style view and visible high-signal hierarchy.
     - Users can act on a warning within two taps.
-  - Status: `in_progress`
+  - Status: `done`
   - Progress:
-    - report header tile and signal badges added.
-    - evidence screens now show evidence timeline framing and signal levels.
+    - added monitor-style dashboard summary header with severity badge and KPI tiles.
+    - added action cards for scroll-to-top/scroll-to-latest navigation.
+    - added live throughput visualization and endpoint/throughput stream metrics in advanced mode.
 
 - CYX-905: Add unauthorized-permission feedback and notification
   - Scope:
@@ -415,9 +419,10 @@ Statuses are `todo`, `in_progress`, `blocked`, and `done`.
   - Acceptance:
     - New controls are discoverable and accessible in screenshot tests.
     - Report screens communicate limits clearly for users with no prior VPN security background.
-  - Status: `in_progress`
+  - Status: `done`
   - Progress:
-    - explicit copy added to dashboard summary and transparency settings.
+    - explicit copy added to dashboard summary, transparency settings, usage onboarding, and inventory evidence.
+    - existing action controls keep stable accessibility labels and now use non-redundant scroll controls in dashboard.
 
 - CYX-907: Add CI/CD release pipeline and release artifact flow
   - Scope:

@@ -92,4 +92,4 @@ Build an Android-first local-first privacy observability app that helps users un
 ## Current Execution Mapping
 
 - For actionable, status-tracked stories, use [docs/backlog.md](backlog.md).
-- Current active focus: CYX-904 and CYX-906 (monitor-style reporting polish), plus release tag tracking for `0.0.1`.
+- Current active focus: `0.0.1` release tag cut and remote artifact verification (workflow smoke run + release note generation).

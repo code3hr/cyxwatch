@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -20,6 +21,7 @@ private const val CHANNEL_ID = "cyxwatch_warnings"
 private const val CHANNEL_NAME = "CyxWatch Permission Warnings"
 private const val CHANNEL_DESCRIPTION = "Warning notifications for sensitive permission changes"
 private const val NOTIFICATION_ID_BASE = 8100
+private const val NOTIFICATION_ID_ACCESS_WARNING = 9200
 private const val EXTRA_ALERT_PACKAGE = "cyxwatch_open_package"
 
 class CyxWatchNotifier(
@@ -64,6 +66,40 @@ class CyxWatchNotifier(
 
         NotificationManagerCompat.from(context)
             .notify(notificationId(alert), notification)
+    }
+
+    @SuppressLint("MissingPermission")
+    fun postUsageAccessWarning() {
+        if (!hasPostNotificationPermission()) {
+            return
+        }
+
+        createChannel()
+        val title = "CyxWatch access is paused"
+        val contentText = "Usage Access was revoked or disabled. Open settings to restore observations."
+
+        val settingsIntent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            9910,
+            settingsIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(title)
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .build()
+
+        NotificationManagerCompat.from(context)
+            .notify(NOTIFICATION_ID_ACCESS_WARNING, notification)
     }
 
     private fun hasPostNotificationPermission(): Boolean {
