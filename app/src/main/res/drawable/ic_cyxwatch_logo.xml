@@ -5,32 +5,57 @@
     android:viewportHeight="96">
     <path
         android:fillColor="@color/cyx_primary"
-        android:pathData="M48,4C70.1,4 88,21.9 88,44C88,66.1 70.1,84 48,84C25.9,84 8,66.1 8,44C8,21.9 25.9,4 48,4Z" />
+        android:pathData="M16,4h64a12,12 0 0,1 12,12v64a12,12 0 0,1 -12,12H16a12,12 0 0,1 -12,-12V16a12,12 0 0,1 12,-12Z" />
     <path
         android:fillColor="@color/cyx_background"
-        android:pathData="M48,12C66.8,12 82,27.2 82,46C82,64.8 66.8,80 48,80C29.2,80 14,64.8 14,46C14,27.2 29.2,12 48,12Z" />
+        android:pathData="M22,10h52a10,10 0 0,1 10,10v56a10,10 0 0,1 -10,10H22a10,10 0 0,1 -10,-10V20a10,10 0 0,1 10,-10Z" />
     <path
+        android:fillColor="@android:color/transparent"
         android:strokeColor="@color/cyx_primary"
-        android:strokeWidth="6"
+        android:strokeWidth="4.8"
         android:strokeLineCap="round"
-        android:fillColor="@android:color/transparent"
-        android:pathData="M32,38H61" />
+        android:pathData="M48,22C29.5,22 14.5,37 14.5,55.5C14.5,74 29.5,89 48,89C66.5,89 81.5,74 81.5,55.5C81.5,37 66.5,22 48,22Z" />
     <path
-        android:strokeColor="@color/cyx_on_surface"
-        android:strokeWidth="6"
-        android:strokeLineCap="round"
         android:fillColor="@android:color/transparent"
-        android:pathData="M32,44H53" />
+        android:strokeColor="@color/cyx_on_surface"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M57,29C44,31 36,42 36,55.5C36,63 39,69.5 45,73.5" />
     <path
-        android:strokeColor="@color/cyx_on_surface"
-        android:strokeWidth="6"
-        android:strokeLineCap="round"
         android:fillColor="@android:color/transparent"
-        android:pathData="M35,50H60" />
+        android:strokeColor="@color/cyx_primary"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M39,45L57,45" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="@color/cyx_on_surface"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M33,52L63,52" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="@color/cyx_on_surface"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M39,59L57,59" />
+    <path
+        android:fillColor="@color/cyx_primary"
+        android:pathData="M48,30m-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0" />
+    <path
+        android:fillColor="@color/cyx_primary"
+        android:pathData="M48,45m-4,0a4,4 0 1,0 8,0a4,4 0 1,0 -8,0" />
+    <path
+        android:fillColor="@color/cyx_primary"
+        android:pathData="M35.5,52m-2.7,0a2.7,2.7 0 1,0 5.4,0a2.7,2.7 0 1,0 -5.4,0" />
+    <path
+        android:fillColor="@color/cyx_primary"
+        android:pathData="M60.5,52m-2.7,0a2.7,2.7 0 1,0 5.4,0a2.7,2.7 0 1,0 -5.4,0" />
+    <path
+        android:fillColor="@color/cyx_primary"
+        android:pathData="M48,59m-2.7,0a2.7,2.7 0 1,0 5.4,0a2.7,2.7 0 1,0 -5.4,0" />
     <path
         android:fillColor="@color/cyx_on_surface"
-        android:pathData="M52,23L52,34 65,28Z" />
-    <path
-        android:fillColor="@color/cyx_background"
-        android:pathData="M44,30L46,38L42,38ZM44,30L42,38L40,38ZM44,30L46,24L44,16L42,24L44,30Z" />
+        android:fillType="evenOdd"
+        android:pathData="M56,63l5,9.5h-18l6,-12Z" />
 </vector>
