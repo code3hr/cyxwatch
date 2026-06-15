@@ -99,6 +99,6 @@ jobs:
         with:
           tag_name: ${{ steps.release_meta.outputs.version }}
           name: "CyxWatch ${{ steps.release_meta.outputs.version }} (beta)"
-          prerelease: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pre_release || true }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pre_release == 'true' }}
           generate_release_notes: true
           files: release-artifacts/*
