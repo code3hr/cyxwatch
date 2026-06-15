@@ -30,6 +30,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Ensure gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Validate unit tests
         run: ./gradlew test --no-daemon
 
@@ -77,6 +80,9 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+
+      - name: Ensure gradlew executable
+        run: chmod +x ./gradlew
 
       - name: Rebuild release APK
         run: ./gradlew assembleRelease --no-daemon
