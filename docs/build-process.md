@@ -32,7 +32,6 @@ Set-Location D:\Dev\cyxwatch
 # Optional full validation in a temp build directory (avoids repo ACL lock failures):
 ./gradlew.bat -v
 ./gradlew.bat assembleDebug --no-daemon
-./gradlew.bat :app:assembleRelease --no-daemon
 ./gradlew.bat test --no-daemon
 ./gradlew.bat lint --no-daemon
 ```
@@ -42,9 +41,9 @@ Set-Location D:\Dev\cyxwatch
 - `./gradlew.bat -v` (wrapper and plugin version baseline)
 - `./gradlew.bat :app:testDebugUnitTest --tests "com.cyxwatch.app.domain.PrivacyScoreCalculatorTest" --no-daemon -PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-rootbuild'`
 - `./gradlew.bat assembleDebug --no-daemon`
-- `./gradlew.bat :app:assembleRelease --no-daemon`
 - `./gradlew.bat test --no-daemon`
 - `./gradlew.bat lint --no-daemon`
+- `./gradlew.bat :app:assembleDebug --no-daemon`
 
 If you hit `.android/debug.keystore.lock` `Access is denied`, run with `ANDROID_SDK_HOME` set to a writable directory so Android signing writes locks and analytics to that location.
 
@@ -62,7 +61,22 @@ Latest run on 2026-06-14:
   - `D:\Dev\cyxwatch\build\reports\problems\problems-report.html`
   - `C:\Users\chick\.android\debug.keystore.lock`
 - `./gradlew.bat :app:testDebugUnitTest --tests "com.cyxwatch.app.domain.PrivacyScoreCalculatorTest" --no-daemon -PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-rootbuild'` currently passes in this environment.
-- On Android release branch, `./gradlew.bat :app:assembleRelease --no-daemon -PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-rootbuild'` currently succeeds in this environment.
+
+## CI/CD release flow
+
+- Tagging strategy (first release target): `0.0.1`.
+- GitHub Actions workflow: `.github/workflows/ci-cd.yml`.
+- On every push to `main` and pull request:
+  - `./gradlew test`
+  - `./gradlew lintDebug`
+  - `./gradlew :app:compileDebugAndroidTestKotlin`
+  - `./gradlew assembleDebug`
+  - `./gradlew assembleRelease`
+  - Upload `app-debug.apk` and `app-release-unsigned.apk` as workflow artifacts.
+- On any tag push (for example `0.0.1` or `v0.0.1`):
+  - rebuilds release artifact,
+  - creates/updates GitHub release,
+  - attaches `cyxwatch-<tag>-release-unsigned.apk`.
 
 ## Cleanup sequence
 
@@ -88,4 +102,3 @@ If `.android` is still locked, rerun from a user profile with full write access 
   - set `ANDROID_HOME` (or `local.properties` with `sdk.dir=...`).
 - `lint` or runtime checks report usage-access API level problems
   - keep `UsageAccessManager` API-guarded paths for pre-`Q`.
-- Release outputs are currently generated as `app-release-unsigned.apk` by default with this Gradle configuration (`isMinifyEnabled = false`, no custom release signing config set). If you need signed release AAB/APK, add a signing config and signing key before upload.

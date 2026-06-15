@@ -42,6 +42,25 @@ Primary boundaries:
   - `SharedPrefsNetworkUsageTotalsRepository`
   - `SharedPrefsAppInventorySnapshotRepository`
 
+## What the service can and cannot see
+
+- App activity timeline: foreground transitions plus screen-lock state when available from local usage APIs.
+- Declared permissions and package metadata from device package manager.
+- Basic network totals from system network statistics for each app.
+- VPN mode endpoints when explicitly enabled via OS consent flow:
+  - destination IP (when parsed),
+  - protocol label,
+  - packet length,
+  - endpoint-level aggregate counts.
+
+What it **does not** do:
+
+- decrypt traffic,
+- inspect or persist packet payloads,
+- reroute traffic for privacy encryption,
+- replace OS security controls,
+- provide anonymity or shield browsing from your network provider.
+
 ## Network modes
 
 ### Basic mode

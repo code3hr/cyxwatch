@@ -39,6 +39,7 @@
 - [x] `Privacy policy` / transparency note exists.
 - [ ] Screenshot and short summary text prepared.
 - [ ] Final changelog entry prepared.
+- [x] GitHub release workflow added for CI lint/test/assemble and tagged release upload.
 
 ## CYX-802 Release Readiness Notes
 

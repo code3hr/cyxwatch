@@ -1,13 +1,19 @@
 package com.cyxwatch.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -18,6 +24,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -74,7 +83,7 @@ fun DailySummaryScreen(
                 .fillMaxSize()
                 .padding(contentPadding)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
                 OutlinedButton(
@@ -86,26 +95,94 @@ fun DailySummaryScreen(
             }
 
             item {
-                Text("Report window", style = MaterialTheme.typography.titleMedium)
-                Text("Date: ${summary.dateLabel}", style = MaterialTheme.typography.bodySmall)
-                Text(
-                    "Generated: ${formatSummaryTimestamp(summary.generatedAt)}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(
-                    "Window: ${formatSummaryTimestamp(summary.windowStart)} -> ${formatSummaryTimestamp(summary.windowEnd)}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text("Score: ${summary.score}/100", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "Events collected: ${summary.usageEventCount + summary.networkEventCount + summary.inventoryEventCount}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    "Usage events: ${summary.usageEventCount}, network events: ${summary.networkEventCount}, " +
-                        "inventory events: ${summary.inventoryEventCount}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(1.dp),
+                ) {
+                    androidx.compose.foundation.layout.Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text("Report window", style = MaterialTheme.typography.titleMedium)
+                        Text("Date: ${summary.dateLabel}", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Generated: ${formatSummaryTimestamp(summary.generatedAt)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Window: ${formatSummaryTimestamp(summary.windowStart)} -> ${formatSummaryTimestamp(summary.windowEnd)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                MonitorMetric(
+                                    "Score",
+                                    "${summary.score}/100",
+                                    MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                MonitorMetric(
+                                    "Signals",
+                                    summary.topReasons.size.toString(),
+                                    MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                MonitorMetric(
+                                    "Evidence",
+                                    (summary.usageEventCount + summary.networkEventCount + summary.inventoryEventCount).toString(),
+                                    MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                "Usage events: ${summary.usageEventCount}",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                "Network events: ${summary.networkEventCount}",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                "Inventory events: ${summary.inventoryEventCount}",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    androidx.compose.foundation.layout.Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Monitoring scope", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Monitoring is local-first and does not upload evidence.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "VPN visibility (if enabled) reads packet metadata only (endpoint and size), never payload.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "This mode is not a private VPN tunnel and does not hide traffic.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
             }
 
             item {
@@ -121,12 +198,32 @@ fun DailySummaryScreen(
                             summary.topReasons
                                 .take(5)
                                 .forEach { reason ->
-                                    androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    androidx.compose.foundation.layout.Column(
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            val signalLevel = signalLevelForRule(reason.rule)
+                                            SummarySignalBadge(
+                                                level = signalLevel,
+                                                label = signalLevelLabel(signalLevel),
+                                            )
+                                            Text(
+                                                appDisplayName(reason.packageName, appLabelsByPackageName),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                        Text(
+                                            reason.message,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
                                         Text(
                                             "App: ${appDisplayName(reason.packageName, appLabelsByPackageName)}",
                                             style = MaterialTheme.typography.bodySmall,
                                         )
-                                        Text(reason.message, style = MaterialTheme.typography.bodyMedium)
                                         if (
                                             reason.rule == ScoringRule.SensitivePermissionAdded ||
                                             reason.rule == ScoringRule.NewAppWithSensitivePermissions
@@ -178,14 +275,27 @@ fun DailySummaryScreen(
                             Text("No alerts in this window.", style = MaterialTheme.typography.bodySmall)
                         } else {
                             summary.recentAlerts.forEach { alert ->
-                                androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(
-                                        text = appDisplayName(alert.packageName, appLabelsByPackageName),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
+                                androidx.compose.foundation.layout.Column(
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    val signalLevel = signalLevelForRule(alert.rule)
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        SummarySignalBadge(
+                                            level = signalLevel,
+                                            label = signalLevelLabel(signalLevel),
+                                        )
+                                        Text(
+                                            appDisplayName(alert.packageName, appLabelsByPackageName),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
                                     Text(
                                         text = alert.message,
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        style = MaterialTheme.typography.bodySmall,
                                     )
                                     Text(
                                         text = "Triggered: ${formatSummaryTimestamp(alert.triggeredAt)} | ${alert.triggerDelta} points",
@@ -235,6 +345,7 @@ fun DailySummaryScreen(
                                 .map { it.packageName }
                                 .toSet()
                             summary.topApps.forEach { packageName ->
+                                val isLoaded = loadedPackageSet.contains(packageName)
                                 OutlinedButton(
                                     onClick = { onOpenTopApp(packageName) },
                                     modifier = Modifier
@@ -242,9 +353,12 @@ fun DailySummaryScreen(
                                         .semantics {
                                             contentDescription = "Open app profile for $packageName"
                                         },
-                                    enabled = loadedPackageSet.contains(packageName),
+                                    enabled = isLoaded,
                                 ) {
-                                    Text(appDisplayName(packageName, appLabelsByPackageName))
+                                    Text(
+                                        text = appDisplayName(packageName, appLabelsByPackageName),
+                                        modifier = Modifier.weight(1f),
+                                    )
                                 }
                             }
                         }
@@ -260,4 +374,46 @@ private fun formatSummaryTimestamp(timestamp: Instant): String {
         .ofPattern("MMM d, HH:mm")
         .withZone(ZoneId.systemDefault())
         .format(timestamp)
+}
+
+@Composable
+private fun MonitorMetric(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = Modifier
+            .then(modifier)
+            .clip(RoundedCornerShape(8.dp))
+            .background(accent.copy(alpha = 0.08f))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall)
+        Text(value, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@Composable
+private fun SummarySignalBadge(level: SignalLevel, label: String) {
+    val background = when (level) {
+        SignalLevel.HIGH -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+        SignalLevel.MEDIUM -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
+        SignalLevel.LOW -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+    }
+    val textColor = when (level) {
+        SignalLevel.HIGH -> MaterialTheme.colorScheme.onErrorContainer
+        SignalLevel.MEDIUM -> MaterialTheme.colorScheme.onTertiaryContainer
+        SignalLevel.LOW -> MaterialTheme.colorScheme.onSecondaryContainer
+    }
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(background)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = textColor)
+    }
 }

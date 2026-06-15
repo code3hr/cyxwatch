@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -47,14 +49,31 @@ fun InventoryEvidenceScreen(
                 Text("Back")
             }
 
-            Text("Profile: ${profile.label}", style = MaterialTheme.typography.titleMedium)
-            Text("Permission: ${readablePermission(permission)}", style = MaterialTheme.typography.titleSmall)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(1.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Profile: ${profile.label}", style = MaterialTheme.typography.titleMedium)
+                    Text("Package: ${profile.packageName}", style = MaterialTheme.typography.bodySmall)
+                    Text("Permission: ${readablePermission(permission)}", style = MaterialTheme.typography.titleSmall)
+                    HorizontalDivider()
+                    Text(
+                        "This screen shows only local permission evidence; no sensitive permission data is uploaded.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
 
             if (evidenceEvents.isEmpty()) {
                 Text("No recorded timeline evidence for this permission yet.")
                 return@Scaffold
             }
 
+            Text("Evidence timeline", style = MaterialTheme.typography.titleSmall)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(evidenceEvents) { event ->
                     Card(modifier = Modifier.fillMaxWidth()) {
@@ -71,6 +90,12 @@ fun InventoryEvidenceScreen(
                                 text = "source: ${event.source}",
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                            val eventSignalLevel = signalLevelForEventSeverity(event.severity)
+                            Text(
+                                "Signal: ${signalLevelLabel(eventSignalLevel)}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text("Evidence ID: ${event.eventId}", style = MaterialTheme.typography.bodySmall)
                             Text(event.explanation, style = MaterialTheme.typography.bodyMedium)
                             Text(
                                 text = event.evidenceJson,
@@ -78,7 +103,6 @@ fun InventoryEvidenceScreen(
                                 maxLines = 6,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Text("severity: ${event.severity}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

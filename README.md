@@ -18,23 +18,23 @@ The first practical target is Android. iOS can share branding, education, accoun
 - [Android tooling baseline](docs/android-tooling-baseline.md)
 - [Build process](docs/build-process.md)
 
-## CI/CD
-
-- GitHub Actions workflow: `.github/workflows/cyxwatch-ci-cd.yml`
-- CI runs unit tests, lint, and `assembleDebug` on pull requests and pushes to `main`.
-- Release flow is available in two ways:
-  - Push a tag in the form `v*` (for example: `v0.0.1`) to cut a GitHub release.
-  - Manually run the workflow from Actions and set `release_version`.
-
-Release artifacts are named:
-
-- `cyxwatch-<version>-beta.apk`
-
 ## Product Direction
 
 Tagline: See what your apps are really doing.
 
 CyxWatch should not be positioned as antivirus or spyware removal. The stronger position is real-time app transparency: useful evidence, simple explanations, and low battery impact.
+
+## How CyxWatch Works
+
+- **Local-first signals only:** Usage access, installed app metadata, declared permissions, and network counters are evaluated on-device only.
+- **Network visibility modes:**
+  - **Basic mode:** `NetworkStatsManager` byte totals by app.
+  - **Advanced mode:** explicit user opt-in VPN path with local packet header visibility (endpoint + size only). No content payloads.
+- **Risk explainability:** scoring reasons include app name/package context and signal identifiers so users can open supporting evidence quickly.
+- **Sensitive-permission alerts:** when sensitive permissions are newly added or found on new install, CYXWatch raises an in-app warning and notification path for direct review.
+- **Important limitation:** this is **not** a private VPN/tunnel service. It does not hide traffic or provide end-to-end anonymity; it only increases observability for local audits.
+
+See [docs/system-overview.md](docs/system-overview.md) for the full component flow and data boundaries.
 
 ## MVP
 

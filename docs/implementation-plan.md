@@ -65,6 +65,11 @@ Build an Android-first local-first privacy observability app that helps users un
 - Add explicit monitor copy for VPN limitations and consent boundaries inside report views.
 - Capture screenshot evidence for report and evidence screen polish before launch.
 
+### 10) CI/CD and Release Packaging
+- Add CI pipeline for lint, unit tests, debug/release assembly, and artifact upload.
+- Build and publish tagged releases from GitHub Actions (`0.0.1`, future tags).
+- Keep version bump and release notes in repository docs before each release cut.
+
 ## Quality Gates
 
 - Every behavior change includes unit tests.
@@ -87,3 +92,4 @@ Build an Android-first local-first privacy observability app that helps users un
 ## Current Execution Mapping
 
 - For actionable, status-tracked stories, use [docs/backlog.md](backlog.md).
+- Current active focus: CYX-904 and CYX-906 (monitor-style reporting polish), plus release tag tracking for `0.0.1`.

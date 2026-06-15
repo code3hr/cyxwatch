@@ -1,5 +1,6 @@
 package com.cyxwatch.app.platform.notifications
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -24,6 +25,7 @@ private const val EXTRA_ALERT_PACKAGE = "cyxwatch_open_package"
 class CyxWatchNotifier(
     private val context: Context,
 ) {
+    @SuppressLint("MissingPermission")
     fun postPermissionWarning(alert: PrivacyAlert, appDisplayName: String) {
         if (!hasPostNotificationPermission()) {
             return
