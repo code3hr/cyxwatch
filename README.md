@@ -18,6 +18,18 @@ The first practical target is Android. iOS can share branding, education, accoun
 - [Android tooling baseline](docs/android-tooling-baseline.md)
 - [Build process](docs/build-process.md)
 
+## CI/CD
+
+- GitHub Actions workflow: `.github/workflows/cyxwatch-ci-cd.yml`
+- CI runs unit tests, lint, and `assembleDebug` on pull requests and pushes to `main`.
+- Release flow is available in two ways:
+  - Push a tag in the form `v*` (for example: `v0.0.1`) to cut a GitHub release.
+  - Manually run the workflow from Actions and set `release_version`.
+
+Release artifacts are named:
+
+- `cyxwatch-<version>-beta.apk`
+
 ## Product Direction
 
 Tagline: See what your apps are really doing.
