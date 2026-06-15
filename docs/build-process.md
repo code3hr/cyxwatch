@@ -66,7 +66,7 @@ Example (PowerShell, debug keystore):
 ```powershell
 $env:JAVA_HOME='D:\ProgramFiles 64\jbr'
 $out='D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.3-release-debugsigned.apk'
-$input='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build\outputs\apk\release\app-release-unsigned.apk'
+$input='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build\outputs\apk\release\app-release.apk'
 
 ./gradlew.bat assembleRelease --no-daemon -PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build'
 
