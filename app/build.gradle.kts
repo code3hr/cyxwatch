@@ -28,9 +28,6 @@ val hasExplicitReleaseKeystore = releaseKeystoreFile?.exists() == true &&
     !releaseKeystoreAlias.isNullOrBlank() &&
     !releaseKeyPassword.isNullOrBlank()
 
-val debugKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
-val useDebugFallbackSigning = !hasExplicitReleaseKeystore && debugKeystore.exists()
-
 android {
     namespace = "com.cyxwatch.app"
     compileSdk = 34
@@ -39,8 +36,8 @@ android {
         applicationId = "com.cyxwatch.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.0.3"
+        versionCode = 4
+        versionName = "0.0.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -54,12 +51,9 @@ android {
             }
         }
 
-        if (useDebugFallbackSigning) {
+        if (!hasExplicitReleaseKeystore) {
             create("releaseDebugFallback") {
-                storeFile = debugKeystore
-                storePassword = "android"
-                keyAlias = "androiddebugkey"
-                keyPassword = "android"
+                initWith(signingConfigs.getByName("debug"))
             }
         }
     }
@@ -69,7 +63,7 @@ android {
             isMinifyEnabled = false
             signingConfig = when {
                 hasExplicitReleaseKeystore -> signingConfigs.getByName("release")
-                useDebugFallbackSigning -> signingConfigs.getByName("releaseDebugFallback")
+                signingConfigs.names.contains("releaseDebugFallback") -> signingConfigs.getByName("releaseDebugFallback")
                 else -> null
             }
             proguardFiles(

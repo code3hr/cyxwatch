@@ -68,11 +68,14 @@ If you hit `.android/debug.keystore.lock` `Access is denied`, run with `ANDROID_
 
 Use `-PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-rootbuild'` whenever you hit repository write/access-denied errors under `D:\Dev\cyxwatch\app\build` or `D:\Dev\cyxwatch\build`.
 
+If you use a custom `-PbuildDir`, build outputs live in that temp directory first and `app/build/...` may remain stale. Use `scripts\build-cyxwatch.ps1 -Mode ci|release|debug` to synchronize canonical APK files back into `app/build/outputs/...`.
+
 ## Release APK installability
 
 - `app-release-unsigned.apk` is only produced when no signing key is available.
 - If release signing credentials are configured, `assembleRelease` outputs a signed APK that is installable.
-- If no release credentials exist, Gradle falls back to local test signing with `~/.android/debug.keystore`.
+- If no release credentials exist, Gradle now reuses the Android debug signing config (`signingConfigs.debug`) for release fallback, so debug and release use the same local certificate.
+- If debug keystore is missing, create one with Android tooling (`keytool`) or provide explicit `CYXWATCH_RELEASE_*` credentials before release.
 
 Release signing inputs (optional):
 
@@ -84,7 +87,7 @@ Release signing inputs (optional):
 Example (PowerShell, debug keystore):
 ```powershell
 $env:JAVA_HOME='D:\ProgramFiles 64\jbr'
-$out='D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.3-release-debugsigned.apk'
+$out='D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.4-release-debugsigned.apk'
 $input='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build\outputs\apk\release\app-release.apk'
 
 ./gradlew.bat assembleRelease --no-daemon -PbuildDir='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build'
@@ -95,9 +98,11 @@ $input='C:\Users\chick\AppData\Local\Temp\cyxwatch-release-build\outputs\apk\rel
   --out $out $input
 ```
 
+If `adb` is in PATH and you are upgrading from an installed debug build, uninstall first only if you need a different certificate.
+
 If `adb` is in PATH:
 ```powershell
-adb install -r -d -g D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.3-release-debugsigned.apk
+adb install -r -d -g D:\Dev\cyxwatch\artifacts\cyxwatch-0.0.4-release-debugsigned.apk
 ```
 
 ## Current observed outcomes
@@ -122,7 +127,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-cyxwatch.ps1 -Mode ci -St
 
 ## CI/CD release flow
 
-- Current tag target: `0.0.3`.
+- Current tag target: `0.0.4`.
 - GitHub Actions workflow: `.github/workflows/ci-cd.yml`.
 - On every push to `main` and pull request:
   - `./gradlew test`
@@ -132,7 +137,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-cyxwatch.ps1 -Mode ci -St
   - `./gradlew assembleRelease`
   - Upload `app-debug.apk` and the release output (signed if configured, otherwise unsigned) as workflow artifacts.
   - If release signing is available on CI, `assembleRelease` produces signed `app-release.apk`.
-- On any tag push (for example `0.0.3` or `v0.0.3`) **or manual workflow dispatch with `run_release=true`**:
+- On any tag push (for example `0.0.4` or `v0.0.4`) **or manual workflow dispatch with `run_release=true`**:
   - rebuilds release artifact,
   - creates/updates GitHub release,
   - uploads `cyxwatch-<tag>-release.apk` when signed, otherwise `cyxwatch-<tag>-release-unsigned.apk`.

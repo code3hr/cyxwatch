@@ -51,10 +51,14 @@ $projectRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $buildDirDebugApk = Join-Path $BuildDir 'outputs\apk\debug\app-debug.apk'
 $buildDirReleaseApk = Join-Path $BuildDir 'outputs\apk\release\app-release.apk'
 $buildDirUnsignedReleaseApk = Join-Path $BuildDir 'outputs\apk\release\app-release-unsigned.apk'
+$buildDirOutputMetadata = Join-Path $BuildDir 'outputs\apk\release\output-metadata.json'
+$buildDirDebugOutputMetadata = Join-Path $BuildDir 'outputs\apk\debug\output-metadata.json'
 
 $canonicalDebugApk = Join-Path $projectRoot 'app\build\outputs\apk\debug\app-debug.apk'
 $canonicalReleaseApk = Join-Path $projectRoot 'app\build\outputs\apk\release\app-release.apk'
 $canonicalUnsignedReleaseApk = Join-Path $projectRoot 'app\build\outputs\apk\release\app-release-unsigned.apk'
+$canonicalOutputMetadata = Join-Path $projectRoot 'app\build\outputs\apk\release\output-metadata.json'
+$canonicalDebugOutputMetadata = Join-Path $projectRoot 'app\build\outputs\apk\debug\output-metadata.json'
 
 function Copy-ApkArtifact {
     param(
@@ -81,6 +85,7 @@ function Write-ApkDiagnostics {
 
 function Sync-DebugApkArtifact {
     Copy-ApkArtifact -Source $buildDirDebugApk -Destination $canonicalDebugApk
+    Copy-ApkArtifact -Source $buildDirDebugOutputMetadata -Destination $canonicalDebugOutputMetadata
     if (Test-Path $canonicalDebugApk) {
         Write-ApkDiagnostics -Path $canonicalDebugApk
     } elseif (Test-Path $buildDirDebugApk) {
@@ -94,6 +99,7 @@ function Sync-DebugApkArtifact {
 function Sync-ReleaseApkArtifact {
     if (Test-Path $buildDirReleaseApk) {
         Copy-ApkArtifact -Source $buildDirReleaseApk -Destination $canonicalReleaseApk
+        Copy-ApkArtifact -Source $buildDirOutputMetadata -Destination $canonicalOutputMetadata
         if (Test-Path $canonicalUnsignedReleaseApk) {
             try {
                 Remove-Item -Force $canonicalUnsignedReleaseApk -ErrorAction Stop
