@@ -3,6 +3,7 @@ package com.cyxwatch.app.ui
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.cyxwatch.app.domain.model.AppProfile
@@ -41,6 +42,8 @@ class AppProfileScreenTest {
 
         composeRule.onNodeWithContentDescription("Back to previous app profile screen").performClick()
         composeRule.onNodeWithContentDescription("Open evidence for Camera permission").performClick()
+        composeRule.onNodeWithText("Permission posture").assertExists()
+        composeRule.onNodeWithText("All permissions (2)").assertExists()
 
         assertTrue(backClicked)
         assertEquals("android.permission.CAMERA", clickedPermission)

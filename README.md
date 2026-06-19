@@ -17,6 +17,9 @@ The first practical target is Android. iOS can share branding, education, accoun
 - [Release checklist](docs/release-checklist.md)
 - [Android tooling baseline](docs/android-tooling-baseline.md)
 - [Build process](docs/build-process.md)
+- [Security layer](docs/security-layer.md)
+- [Security implementation TODO](docs/todo_security.md)
+- [Launch-gate onboarding plan](docs/launch-gate-plan.md)
 
 ## Product Direction
 
@@ -88,3 +91,32 @@ CyxWatch must be more privacy-preserving than the apps it reports on:
 6. Alert rules and daily summary.
 
 See [docs/product-architecture.md](docs/product-architecture.md) for the detailed MVP architecture and platform constraints.
+
+## Local Build Commands (reliable, anti-stall)
+
+Use the helper script so the Gradle environment is always initialized the same way:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+powershell -ExecutionPolicy Bypass -File scripts\build-cyxwatch.ps1 -Mode debug
+```
+
+Other presets:
+
+- `-Mode test` → `./gradlew test`
+- `-Mode lint` → `./gradlew lintDebug`
+- `-Mode release` → `./gradlew assembleRelease`
+- `-Mode ci` → test + lint + compile debug AndroidTest + both APK builds
+
+`build-cyxwatch.ps1` outputs synced APKs to:
+- `app\build\outputs\apk\debug\app-debug.apk`
+- `app\build\outputs\apk\release\app-release.apk` or `app-release-unsigned.apk`
+
+If a run gets blocked by stale Gradle/Java processes, add `-StopJava`.
+If lock contention keeps recurring (for example `.lck` files in temp caches), add `-CleanBuildState`.
+
+Example hard recovery:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build-cyxwatch.ps1 -Mode ci -StopJava -CleanBuildState
+```

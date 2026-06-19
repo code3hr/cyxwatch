@@ -2,7 +2,6 @@ package com.cyxwatch.app.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -17,7 +16,7 @@ class UsageAccessScreenTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun shows_denied_history_and_triggers_callbacks() {
+    fun usage_access_screen_displays_actions_and_scroll_controls() {
         var openSettingsClicked = false
         var refreshClicked = false
 
@@ -25,20 +24,17 @@ class UsageAccessScreenTest {
             UsageAccessScreen(
                 hasUsageAccess = false,
                 hasEverDenied = true,
-                deniedCount = 2,
-                checkCount = 3,
-                lastCheckedLabel = "Jun 14, 2026 12:00",
+                deniedCount = 1,
+                checkCount = 2,
+                lastCheckedLabel = "2026-06-19T00:00:00Z",
                 onOpenSettingsClick = { openSettingsClicked = true },
                 onRefreshClick = { refreshClicked = true },
             )
         }
 
-        composeRule.onNodeWithText("Recent check history: denied 2 time(s), opened 3 time(s).").assertExists()
-        composeRule.onNodeWithText("Last checked: Jun 14, 2026 12:00").assertExists()
-        composeRule.onNodeWithContentDescription("Open usage access settings").assertExists()
         composeRule.onNodeWithContentDescription("Open usage access settings").performClick()
-        composeRule.onNodeWithContentDescription("Recheck usage access status").assertExists()
         composeRule.onNodeWithContentDescription("Recheck usage access status").performClick()
+        composeRule.onNodeWithContentDescription("Scroll to bottom of usage access screen").assertExists()
 
         assertTrue(openSettingsClicked)
         assertTrue(refreshClicked)

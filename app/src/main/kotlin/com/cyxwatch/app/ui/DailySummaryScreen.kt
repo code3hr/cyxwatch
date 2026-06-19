@@ -2,6 +2,7 @@ package com.cyxwatch.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,13 +18,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -34,9 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.cyxwatch.app.domain.DailySummary
 import com.cyxwatch.app.domain.PrivacyAlert
 import com.cyxwatch.app.domain.ScoreReason
-import com.cyxwatch.app.domain.ScoringRule
 import com.cyxwatch.app.domain.model.PrivacyEvent
-import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -54,27 +50,15 @@ fun DailySummaryScreen(
     appLabelsByPackageName: Map<String, String> = emptyMap(),
 ) {
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
-    val canScrollDown by remember { derivedStateOf { listState.canScrollForward } }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Daily Summary") }) },
         floatingActionButton = {
-            if (canScrollDown) {
-                OutlinedButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            val totalItems = listState.layoutInfo.totalItemsCount
-                            if (totalItems > 0) {
-                                listState.animateScrollToItem(totalItems - 1)
-                            }
-                        }
-                    },
-                    modifier = Modifier.semantics { contentDescription = "Scroll to bottom of report" },
-                ) {
-                    Text("Scroll down")
-                }
-            }
+            LazyListScrollNavigationControls(
+                listState = listState,
+                topContentDescription = "Scroll to top of report",
+                bottomContentDescription = "Scroll to bottom of report",
+            )
         },
     ) { contentPadding ->
         LazyColumn(
@@ -114,30 +98,30 @@ fun DailySummaryScreen(
                             "Window: ${formatSummaryTimestamp(summary.windowStart)} -> ${formatSummaryTimestamp(summary.windowEnd)}",
                             style = MaterialTheme.typography.bodySmall,
                         )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                MonitorMetric(
-                                    "Score",
-                                    "${summary.score}/100",
-                                    MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                MonitorMetric(
-                                    "Signals",
-                                    summary.topReasons.size.toString(),
-                                    MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                MonitorMetric(
-                                    "Evidence",
-                                    (summary.usageEventCount + summary.networkEventCount + summary.inventoryEventCount).toString(),
-                                    MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            MonitorMetric(
+                                "Score",
+                                "${summary.score}/100",
+                                MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            MonitorMetric(
+                                "Signals",
+                                summary.topReasons.size.toString(),
+                                MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            MonitorMetric(
+                                "Evidence",
+                                (summary.usageEventCount + summary.networkEventCount + summary.inventoryEventCount).toString(),
+                                MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -161,7 +145,6 @@ fun DailySummaryScreen(
                     }
                 }
             }
-
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     androidx.compose.foundation.layout.Column(
@@ -198,65 +181,11 @@ fun DailySummaryScreen(
                             summary.topReasons
                                 .take(5)
                                 .forEach { reason ->
-                                    androidx.compose.foundation.layout.Column(
-                                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    ) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            val signalLevel = signalLevelForRule(reason.rule)
-                                            SummarySignalBadge(
-                                                level = signalLevel,
-                                                label = signalLevelLabel(signalLevel),
-                                            )
-                                            Text(
-                                                appDisplayName(reason.packageName, appLabelsByPackageName),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                        }
-                                        Text(
-                                            reason.message,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                        )
-                                        Text(
-                                            "App: ${appDisplayName(reason.packageName, appLabelsByPackageName)}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                        if (
-                                            reason.rule == ScoringRule.SensitivePermissionAdded ||
-                                            reason.rule == ScoringRule.NewAppWithSensitivePermissions
-                                        ) {
-                                            val permissions = extractPermissionValues(reason.message)
-                                                .map(::readablePermissionName)
-                                                .joinToString(", ")
-                                            if (permissions.isNotBlank()) {
-                                                Text(
-                                                    "Sensitive permissions: $permissions",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                )
-                                            }
-                                        }
-                                        Text(
-                                            "Penalty: -${reason.delta}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                        Text(
-                                            "Evidence events: ${reason.evidenceEventIds.size}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                        OutlinedButton(
-                                            onClick = { onOpenReason(reason) },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .semantics {
-                                                    contentDescription = "Open score reason evidence for ${reason.packageName}"
-                                                },
-                                        ) {
-                                            Text("Open evidence")
-                                        }
-                                    }
+                                    DailySummaryRiskReasonPanel(
+                                        reason = reason,
+                                        appLabelsByPackageName = appLabelsByPackageName,
+                                        onOpenReason = onOpenReason,
+                                    )
                                 }
                         }
                     }
@@ -275,56 +204,12 @@ fun DailySummaryScreen(
                             Text("No alerts in this window.", style = MaterialTheme.typography.bodySmall)
                         } else {
                             summary.recentAlerts.forEach { alert ->
-                                androidx.compose.foundation.layout.Column(
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    val signalLevel = signalLevelForRule(alert.rule)
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        SummarySignalBadge(
-                                            level = signalLevel,
-                                            label = signalLevelLabel(signalLevel),
-                                        )
-                                        Text(
-                                            appDisplayName(alert.packageName, appLabelsByPackageName),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                    Text(
-                                        text = alert.message,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    Text(
-                                        text = "Triggered: ${formatSummaryTimestamp(alert.triggeredAt)} | ${alert.triggerDelta} points",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    OutlinedButton(
-                                        onClick = { onOpenAlert(alert) },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .semantics {
-                                                contentDescription = "Open alert evidence for ${alert.packageName}"
-                                            },
-                                    ) {
-                                        Text("Open supporting evidence")
-                                    }
-                                    if (alert.rule.isSensitivePermissionWarning()) {
-                                        OutlinedButton(
-                                            onClick = { onOpenAlertProfile(alert.packageName) },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .semantics {
-                                                    contentDescription = "Open app profile from alert ${alert.packageName}"
-                                                },
-                                            enabled = appLabelsByPackageName.containsKey(alert.packageName),
-                                        ) {
-                                            Text("Open app profile")
-                                        }
-                                    }
-                                }
+                                DailySummaryAlertPanel(
+                                    alert = alert,
+                                    appLabelsByPackageName = appLabelsByPackageName,
+                                    onOpenAlert = onOpenAlert,
+                                    onOpenAlertProfile = onOpenAlertProfile,
+                                )
                             }
                         }
                     }
@@ -363,6 +248,214 @@ fun DailySummaryScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailySummaryRiskReasonPanel(
+    reason: ScoreReason,
+    appLabelsByPackageName: Map<String, String>,
+    onOpenReason: (ScoreReason) -> Unit,
+) {
+    val isSensitivePermissionReason = reason.rule.isSensitivePermissionWarning()
+    val isCriticalSignal = reason.rule.isCriticalWarning()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isCriticalSignal) {
+                    Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.error,
+                        MaterialTheme.shapes.small,
+                    )
+                } else {
+                    Modifier
+                },
+            ),
+        color = if (isCriticalSignal) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
+        },
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            val signalLevel = signalLevelForRule(reason.rule)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummarySignalBadge(
+                    level = signalLevel,
+                    label = signalLevelLabel(signalLevel),
+                )
+                if (isCriticalSignal) {
+                    Text(
+                        "Critical",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text(
+                    appDisplayName(reason.packageName, appLabelsByPackageName),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "-${reason.delta}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Text(
+                reason.rule.description,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                reason.message,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (isSensitivePermissionReason) {
+                val permissions = extractPermissionValues(reason.message)
+                    .map(::readablePermissionName)
+                    .joinToString(", ")
+                if (permissions.isNotBlank()) {
+                    Text(
+                        "Sensitive permissions: $permissions",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Text(
+                "Evidence events: ${reason.evidenceEventIds.size}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = { onOpenReason(reason) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "Open score reason evidence for ${reason.packageName}"
+                    },
+            ) {
+                Text(
+                    if (isSensitivePermissionReason) {
+                        "Review permission evidence"
+                    } else {
+                        "Open evidence"
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailySummaryAlertPanel(
+    alert: PrivacyAlert,
+    appLabelsByPackageName: Map<String, String>,
+    onOpenAlert: (PrivacyAlert) -> Unit,
+    onOpenAlertProfile: (String) -> Unit,
+) {
+    val isSensitivePermissionWarning = alert.rule.isSensitivePermissionWarning()
+    val isCriticalAlert = alert.rule.isCriticalWarning()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isCriticalAlert) {
+                    Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.error,
+                        MaterialTheme.shapes.small,
+                    )
+                } else {
+                    Modifier
+                },
+            ),
+        color = if (isCriticalAlert) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+        } else if (isSensitivePermissionWarning) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+        },
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            val signalLevel = signalLevelForRule(alert.rule)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummarySignalBadge(
+                    level = signalLevel,
+                    label = signalLevelLabel(signalLevel),
+                )
+                if (isCriticalAlert) {
+                    Text(
+                        "Critical",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text(
+                    if (isSensitivePermissionWarning) {
+                        "Permission warning"
+                    } else {
+                        "Behavior alert"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isSensitivePermissionWarning) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+            }
+            Text(
+                appDisplayName(alert.packageName, appLabelsByPackageName),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = alert.message,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = "Triggered: ${formatSummaryTimestamp(alert.triggeredAt)} | score impact -${alert.triggerDelta}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = { onOpenAlert(alert) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "Open alert evidence for ${alert.packageName}"
+                    },
+            ) {
+                Text("Open supporting evidence")
+            }
+            if (isSensitivePermissionWarning) {
+                OutlinedButton(
+                    onClick = { onOpenAlertProfile(alert.packageName) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = "Open app profile from alert ${alert.packageName}"
+                        },
+                    enabled = appLabelsByPackageName.containsKey(alert.packageName),
+                ) {
+                    Text("Open app profile")
                 }
             }
         }

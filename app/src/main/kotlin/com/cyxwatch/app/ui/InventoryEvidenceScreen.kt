@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,7 +36,18 @@ fun InventoryEvidenceScreen(
     evidenceEvents: List<PrivacyEvent>,
     onBack: () -> Unit,
 ) {
-    Scaffold(topBar = { TopAppBar(title = { Text("Permission Evidence") }) }) { contentPadding ->
+    val listState = rememberLazyListState()
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Permission Evidence") }) },
+        floatingActionButton = {
+            LazyListScrollNavigationControls(
+                listState = listState,
+                topContentDescription = "Scroll to top of permission evidence",
+                bottomContentDescription = "Scroll to bottom of permission evidence",
+            )
+        },
+    ) { contentPadding ->
         Column(
             modifier = Modifier
                 .padding(contentPadding)
@@ -59,7 +71,10 @@ fun InventoryEvidenceScreen(
                 ) {
                     Text("Profile: ${profile.label}", style = MaterialTheme.typography.titleMedium)
                     Text("Package: ${profile.packageName}", style = MaterialTheme.typography.bodySmall)
-                    Text("Permission: ${readablePermission(permission)}", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        text = "Permission: ${readablePermissionName(permission)}",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
                     HorizontalDivider()
                     Text(
                         "This screen shows only local permission evidence; no sensitive permission data is uploaded.",
@@ -74,7 +89,10 @@ fun InventoryEvidenceScreen(
             }
 
             Text("Evidence timeline", style = MaterialTheme.typography.titleSmall)
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 items(evidenceEvents) { event ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(
@@ -115,12 +133,4 @@ private fun formatEvidenceTimestamp(timestamp: Instant): String {
     val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm:ss")
         .withZone(ZoneId.systemDefault())
     return formatter.format(timestamp)
-}
-
-private fun readablePermission(permission: String): String {
-    return permission
-        .removePrefix("android.permission.")
-        .replace('_', ' ')
-        .lowercase()
-        .replaceFirstChar { it.uppercase() }
 }

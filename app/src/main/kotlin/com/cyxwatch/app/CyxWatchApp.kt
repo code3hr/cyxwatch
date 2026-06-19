@@ -5,8 +5,10 @@ import android.net.VpnService
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,12 +22,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CardDefaults
@@ -36,7 +40,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -62,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import com.cyxwatch.app.data.inventory.SharedPrefsAppInventorySnapshotRepository
 import com.cyxwatch.app.data.network.SharedPrefsNetworkUsageTotalsRepository
 import com.cyxwatch.app.data.settings.RetentionSettingsRepository
+import com.cyxwatch.app.data.settings.LaunchGateSettingsRepository
 import com.cyxwatch.app.data.settings.VpnModeSettingsRepository
 import com.cyxwatch.app.data.settings.UsageAccessConsentRepository
 import com.cyxwatch.app.domain.BuildInventoryChangeEventsUseCase
@@ -99,6 +103,8 @@ import com.cyxwatch.app.platform.usage.AndroidUsageEventCollector
 import com.cyxwatch.app.ui.AppProfileScreen
 import com.cyxwatch.app.ui.DailySummaryScreen
 import com.cyxwatch.app.ui.InventoryEvidenceScreen
+import com.cyxwatch.app.ui.LaunchGateScreen
+import com.cyxwatch.app.ui.ScrollNavigationControls
 import com.cyxwatch.app.ui.ScoreEvidenceScreen
 import com.cyxwatch.app.ui.TransparencySettingsScreen
 import com.cyxwatch.app.ui.UsageAccessScreen
@@ -117,6 +123,7 @@ fun CyxWatchApp() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val consentRepository = remember { UsageAccessConsentRepository(context) }
+    val launchGateSettingsRepository = remember { LaunchGateSettingsRepository(context) }
     val vpnModeSettingsRepository = remember { VpnModeSettingsRepository(context) }
     val retentionSettingsRepository = remember { RetentionSettingsRepository(context) }
     val usagePermissionStateProvider = remember { UsageAccessPermissionStateProvider(context) }
@@ -161,6 +168,7 @@ fun CyxWatchApp() {
 
     var hasUsageAccess by remember { mutableStateOf(hasUsageAccessGranted(context)) }
     var consentState by remember { mutableStateOf(consentRepository.readState()) }
+    var launchGateState by remember { mutableStateOf(launchGateSettingsRepository.readState()) }
     var collectStatus by remember { mutableStateOf("No data collected yet.") }
     var networkStatus by remember { mutableStateOf("No network data collected yet.") }
     var inventoryStatus by remember { mutableStateOf("No app inventory loaded.") }
@@ -201,6 +209,21 @@ fun CyxWatchApp() {
         }
         permissionWarningNotifier.postUsageAccessWarning()
         lastUsageAccessWarningAt = now
+    }
+
+    fun completeLaunchGate(openedPrivacyControlsFromGate: Boolean) {
+        val now = System.currentTimeMillis()
+        launchGateState = launchGateState.withCompleted(
+            openedPrivacyControlsFromGate = openedPrivacyControlsFromGate,
+            completedAtEpochMs = now,
+        )
+        launchGateSettingsRepository.markCompleted(openedPrivacyControlsFromGate, now)
+    }
+
+    LaunchedEffect(hasUsageAccess, launchGateState.hasCompletedLaunchGate) {
+        if (hasUsageAccess && !launchGateState.hasCompletedLaunchGate) {
+            completeLaunchGate(openedPrivacyControlsFromGate = launchGateState.hasOpenedPrivacyControlsFromGate)
+        }
     }
 
     fun refreshAlerts() {
@@ -406,7 +429,22 @@ fun CyxWatchApp() {
                     )
                 },
             ) { contentPadding ->
-                if (!hasUsageAccess) {
+                if (!launchGateState.hasCompletedLaunchGate && !hasUsageAccess) {
+                    LaunchGateScreen(
+                        onStartMonitoringClick = {
+                            completeLaunchGate(openedPrivacyControlsFromGate = false)
+                            consentRepository.recordSettingsOpened(System.currentTimeMillis())
+                            context.startActivity(openUsageAccessSettingsIntent())
+                        },
+                        onOpenPrivacyControlsClick = {
+                            completeLaunchGate(openedPrivacyControlsFromGate = true)
+                            isTransparencySettingsOpen = true
+                        },
+                        onBackToDashboardClick = {
+                            completeLaunchGate(openedPrivacyControlsFromGate = false)
+                        },
+                    )
+                } else if (!hasUsageAccess) {
                     UsageAccessScreen(
                         hasUsageAccess = hasUsageAccess,
                         hasEverDenied = consentState.hasEverDenied,
@@ -826,20 +864,33 @@ private fun DashboardShell(
     liveVpnThroughputSamples: List<Long>,
 ) {
     val dashboardScrollState = rememberScrollState()
-    val coroutineScope = rememberCoroutineScope()
-    val canScrollToBottom by remember { derivedStateOf { dashboardScrollState.value < dashboardScrollState.maxValue } }
-    val canScrollToTop by remember { derivedStateOf { dashboardScrollState.value > 0 } }
     val scoreBadge = scoreBadgeForPrivacyScore(privacyScore.score)
     val topSignals = privacyScore.reasons.size
-    val topSignalsText = if (topSignals > 0) {
-        privacyScore.reasons.take(3).joinToString("  |  ") { it.packageName }
-    } else {
-        "No active signal sources"
-    }
+    val topSignalsPreview = privacyScore.reasons.take(3)
     val riskSummary = if (topSignals > 0) {
         "${privacyScore.score}/100 score"
     } else {
         "No signal yet"
+    }
+    val hasEvidenceLoaded = usageEvents.isNotEmpty() || networkEvents.isNotEmpty() || hasInventory
+    val sensitivePermissionAlerts = alerts.filter { it.rule.isSensitivePermissionWarning() }
+    val latestSensitivePermissionAlert = sensitivePermissionAlerts.maxByOrNull { it.triggeredAt }
+    val visibleUsageTimeline = usageEvents.take(40)
+    val visibleNetworkTimeline = networkEvents.take(40)
+    val usageSummaryStatus = if (usageEvents.isEmpty()) {
+        "No usage timeline events currently loaded."
+    } else {
+        "Recent usage timeline events: ${usageEvents.size}"
+    }
+    val networkSummaryStatus = if (networkEvents.isEmpty()) {
+        "No network usage events currently loaded."
+    } else {
+        "Recent network usage events: ${networkEvents.size}"
+    }
+    val inventorySummaryStatus = if (hasInventory) {
+        "App inventory loaded"
+    } else {
+        "App inventory not loaded."
     }
     val averageThroughputBytes = if (liveVpnThroughputSamples.isNotEmpty()) {
         liveVpnThroughputSamples.sum() / liveVpnThroughputSamples.size
@@ -847,6 +898,16 @@ private fun DashboardShell(
         0L
     }
     val peakThroughputBytes = liveVpnThroughputSamples.maxOrNull() ?: 0L
+    val panelContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.56f)
+    val panelStrokeColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+    val primaryAccent = MaterialTheme.colorScheme.primary
+    val heroBg = Brush.linearGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+        ),
+    )
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -860,12 +921,16 @@ private fun DashboardShell(
         ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, panelStrokeColor),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
+                containerColor = panelContainerColor,
             ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier
+                    .background(heroBg)
+                    .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Row(
@@ -877,22 +942,22 @@ private fun DashboardShell(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Surface(
-                            modifier = Modifier
-                                .size(34.dp)
+                            Surface(
+                                modifier = Modifier
+                                    .size(34.dp)
                                 .border(
                                     width = 1.dp,
                                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                                     shape = MaterialTheme.shapes.small,
                                 ),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                        ) {
-                            Image(
-                                modifier = Modifier.padding(6.dp),
-                                painter = painterResource(R.drawable.ic_cyxwatch_logo),
-                                contentDescription = "CyxWatch logo",
-                            )
-                        }
+                            ) {
+                                Image(
+                                    modifier = Modifier.padding(6.dp),
+                                    painter = painterResource(R.drawable.ic_cyxwatch_logo),
+                                    contentDescription = "CyxWatch logo",
+                                )
+                            }
                         Column {
                             Text("CyxWatch Monitor", style = MaterialTheme.typography.titleLarge)
                             Text(
@@ -917,8 +982,71 @@ private fun DashboardShell(
                         )
                     }
                 }
-                Text(riskSummary, style = MaterialTheme.typography.titleMedium)
-                Text(topSignalsText, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    riskSummary,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = primaryAccent,
+                )
+                Text(
+                    if (topSignals > 0) {
+                        "Top active signals"
+                    } else {
+                        "No active signal sources"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                )
+    if (topSignalsPreview.isNotEmpty()) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            items(topSignalsPreview) { reason ->
+                MonitorSignalChip(reason = reason, onOpenScoreReasonClick = onOpenScoreReasonClick)
+            }
+        }
+    }
+                if (latestSensitivePermissionAlert != null) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f),
+                        shape = MaterialTheme.shapes.small,
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                "Sensitive permission watch",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Text(
+                                "${latestSensitivePermissionAlert.message} (${formatTimestamp(latestSensitivePermissionAlert.triggeredAt.toEpochMilli())})",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    MonitorStatusBadge(
+                        label = "Mode",
+                        value = if (isVpnModeEnabled) "ADVANCED" else "BASIC",
+                        modifier = Modifier.weight(1f),
+                    )
+                    MonitorStatusBadge(
+                        label = "Evidence window",
+                        value = if (hasEvidenceLoaded) "ACTIVE" else "WAIT",
+                        modifier = Modifier.weight(1f),
+                    )
+                    MonitorStatusBadge(
+                        label = "Open alerts",
+                        value = alerts.size.toString(),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 Text(
                     if (isVpnModeEnabled) {
                         "Advanced visibility is active; endpoint metadata only. No payload capture."
@@ -972,7 +1100,12 @@ private fun DashboardShell(
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, panelStrokeColor),
+            colors = CardDefaults.cardColors(containerColor = panelContainerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        ) {
             Column(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1095,43 +1228,50 @@ private fun DashboardShell(
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, panelStrokeColor),
+            colors = CardDefaults.cardColors(containerColor = panelContainerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        ) {
             Column(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text("Collect windows", style = MaterialTheme.typography.titleMedium)
-                Text(collectionStatus, style = MaterialTheme.typography.bodyMedium)
-                FilledTonalButton(
-                    onClick = onCollectEventsClick,
-                    enabled = !isCollectingUsage,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics { contentDescription = "Collect usage timeline events for last 24 hours" },
-                ) {
-                    Text(if (isCollectingUsage) "Collecting last 24h usage events..." else "Collect last 24h usage events")
-                }
-                Text(networkStatus, style = MaterialTheme.typography.bodyMedium)
-                FilledTonalButton(
-                    onClick = onCollectNetworkEventsClick,
-                    enabled = !isCollectingNetwork,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics { contentDescription = "Collect network usage events for last 24 hours" },
-                ) {
-                    Text(if (isCollectingNetwork) "Collecting last 24h network usage..." else "Collect last 24h network usage")
-                }
-                Text(inventoryStatus, style = MaterialTheme.typography.bodySmall)
-                Text(inventoryChangeStatus, style = MaterialTheme.typography.bodySmall)
-                Button(
-                    enabled = !isCollectingInventory,
-                    onClick = onCollectInventoryClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics { contentDescription = "Refresh installed app inventory" },
-                ) {
-                    Text(if (isCollectingInventory) "Refreshing app inventory..." else "Refresh app inventory")
-                }
+                CollectionActionPanel(
+                    title = "Usage timeline (24h)",
+                    summary = usageSummaryStatus,
+                    status = collectionStatus,
+                    isCollecting = isCollectingUsage,
+                    isActionEnabled = !isCollectingUsage,
+                    actionContentDescription = "Collect usage timeline events for last 24 hours",
+                    actionLabel = if (isCollectingUsage) "Collecting usage (24h)..." else "Collect usage (24h)",
+                    onAction = onCollectEventsClick,
+                    actionButtonType = CollectionActionType.FILLED_TONAL,
+                )
+                CollectionActionPanel(
+                    title = "Network visibility (24h)",
+                    summary = networkSummaryStatus,
+                    status = networkStatus,
+                    isCollecting = isCollectingNetwork,
+                    isActionEnabled = !isCollectingNetwork,
+                    actionContentDescription = "Collect network usage events for last 24 hours",
+                    actionLabel = if (isCollectingNetwork) "Collecting network (24h)..." else "Collect network (24h)",
+                    onAction = onCollectNetworkEventsClick,
+                    actionButtonType = CollectionActionType.FILLED_TONAL,
+                )
+                CollectionActionPanel(
+                    title = "App inventory",
+                    summary = inventorySummaryStatus,
+                    status = "$inventoryStatus | $inventoryChangeStatus",
+                    isCollecting = isCollectingInventory,
+                    isActionEnabled = !isCollectingInventory,
+                    actionContentDescription = "Refresh installed app inventory",
+                    actionLabel = if (isCollectingInventory) "Refreshing app inventory..." else "Refresh app inventory",
+                    onAction = onCollectInventoryClick,
+                    actionButtonType = CollectionActionType.OUTLINED,
+                )
                 if (hasInventory) {
                     Button(
                         onClick = onOpenLatestProfileClick,
@@ -1145,7 +1285,12 @@ private fun DashboardShell(
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, panelStrokeColor),
+            colors = CardDefaults.cardColors(containerColor = panelContainerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        ) {
             Column(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1154,14 +1299,15 @@ private fun DashboardShell(
                 Text(retentionStatus, style = MaterialTheme.typography.bodySmall)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     allowedRetentionDays.forEach { days ->
+                        val isCurrentRetention = retentionSettings.retentionDays == days
                         Button(
                             onClick = { onRetentionDaysClick(days) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .semantics { contentDescription = "$days day retention option" },
                         ) {
-                            val selected = if (retentionSettings.retentionDays == days) "Current" else "Set"
-                            Text("$selected: $days days")
+                            val stateLabel = if (isCurrentRetention) "Active" else "Set"
+                            Text("$stateLabel: $days days")
                         }
                     }
                 }
@@ -1184,7 +1330,12 @@ private fun DashboardShell(
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, panelStrokeColor),
+            colors = CardDefaults.cardColors(containerColor = panelContainerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        ) {
             Column(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1197,30 +1348,22 @@ private fun DashboardShell(
                     Text("Top reasons", style = MaterialTheme.typography.titleSmall)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         privacyScore.reasons.take(3).forEach { reason ->
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(reason.message, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    text = "-${reason.delta} | ${reason.evidenceEventIds.size} evidence event(s)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                Button(
-                                    onClick = { onOpenScoreReasonClick(reason) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .semantics {
-                                            contentDescription = "Open score evidence for ${reason.packageName}"
-                                        },
-                                ) {
-                                    Text("Open evidence")
-                                }
-                            }
+                            DashboardScoreReasonPanel(
+                                reason = reason,
+                                onOpenScoreReasonClick = onOpenScoreReasonClick,
+                            )
                         }
                     }
                 }
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, panelStrokeColor),
+            colors = CardDefaults.cardColors(containerColor = panelContainerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        ) {
             Column(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1232,35 +1375,11 @@ private fun DashboardShell(
                     alerts
                         .take(5)
                         .forEach { alert ->
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(alert.message, style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    text = "Triggered: ${formatAlertTimestamp(alert.triggeredAt)} | ${alert.triggerDelta} points",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                OutlinedButton(
-                                    onClick = { onOpenAlertClick(alert) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .semantics {
-                                            contentDescription = "Open alert evidence for ${alert.packageName}"
-                                        },
-                                ) {
-                                    Text("Open supporting evidence")
-                                }
-                                if (alert.rule.isSensitivePermissionWarning()) {
-                                    OutlinedButton(
-                                        onClick = { onOpenAlertProfileClick(alert.packageName) },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .semantics {
-                                                contentDescription = "Open app profile from alert ${alert.packageName}"
-                                            },
-                                    ) {
-                                        Text("Open app profile")
-                                    }
-                                }
-                            }
+                            DashboardAlertPanel(
+                                alert = alert,
+                                onOpenAlertClick = onOpenAlertClick,
+                                onOpenAlertProfileClick = onOpenAlertProfileClick,
+                            )
                         }
                     if (suppressedAlertCount > 0) {
                         Text(
@@ -1281,7 +1400,7 @@ private fun DashboardShell(
         }
 
         Text("Recent usage timeline", style = MaterialTheme.typography.titleMedium)
-        if (usageEvents.isEmpty()) {
+        if (visibleUsageTimeline.isEmpty()) {
             Text("No timeline events collected yet.")
         } else {
             LazyColumn(
@@ -1290,21 +1409,23 @@ private fun DashboardShell(
                     .heightIn(max = 260.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(usageEvents) { event ->
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            text = "${formatUsageEventTimestamp(event.timestamp)} | ${event.source} | ${event.packageName}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Text(event.explanation, style = MaterialTheme.typography.bodySmall)
-                    }
+                items(visibleUsageTimeline) { event ->
+                    MonitorEventRow(
+                        header = "${formatUsageEventTimestamp(event.timestamp)} | ${event.source}",
+                        title = event.packageName,
+                        detail = event.explanation,
+                    )
                 }
+            }
+            if (usageEvents.size > visibleUsageTimeline.size) {
+                Text(
+                    "Showing ${visibleUsageTimeline.size} of ${usageEvents.size} usage timeline events.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
         Text("Recent network usage", style = MaterialTheme.typography.titleMedium)
-        if (networkEvents.isEmpty()) {
+        if (visibleNetworkTimeline.isEmpty()) {
             Text("No network usage collected yet.")
         } else {
             LazyColumn(
@@ -1313,55 +1434,337 @@ private fun DashboardShell(
                     .heightIn(max = 260.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(networkEvents) { event ->
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            text = "${formatUsageEventTimestamp(event.timestamp)} | ${event.packageName}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Text(event.explanation, style = MaterialTheme.typography.bodySmall)
-                    }
+                items(visibleNetworkTimeline) { event ->
+                    MonitorEventRow(
+                        header = formatUsageEventTimestamp(event.timestamp),
+                        title = event.packageName,
+                        detail = event.explanation,
+                    )
                 }
+            }
+            if (networkEvents.size > visibleNetworkTimeline.size) {
+                Text(
+                    "Showing ${visibleNetworkTimeline.size} of ${networkEvents.size} network usage events.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
         Spacer(modifier = Modifier.size(8.dp))
     }
-    if (dashboardScrollState.maxValue > 0) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-            ) {
-                if (canScrollToTop) {
-                    OutlinedButton(
-                        enabled = canScrollToTop,
-                        onClick = {
-                            coroutineScope.launch {
-                                dashboardScrollState.animateScrollTo(0)
-                            }
-                        },
-                        modifier = Modifier.semantics { contentDescription = "Scroll to top of dashboard" },
-                    ) {
-                        Text("Top")
-                    }
-                }
-                if (canScrollToBottom) {
-                    Button(
-                        enabled = canScrollToBottom,
-                        onClick = {
-                            coroutineScope.launch {
-                                dashboardScrollState.animateScrollTo(dashboardScrollState.maxValue)
-                            }
-                        },
-                        modifier = Modifier.semantics { contentDescription = "Scroll to bottom of dashboard" },
-                    ) {
-                        Text("Latest")
-                    }
+    ScrollNavigationControls(
+        scrollState = dashboardScrollState,
+        topContentDescription = "Scroll to top of dashboard",
+        bottomContentDescription = "Scroll to bottom of dashboard",
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(16.dp),
+    )
+}
+
+}
+
+private enum class CollectionActionType {
+    FILLED_TONAL,
+    OUTLINED,
+}
+
+@Composable
+private fun CollectionActionPanel(
+    title: String,
+    summary: String,
+    status: String,
+    isCollecting: Boolean,
+    isActionEnabled: Boolean,
+    actionContentDescription: String,
+    actionLabel: String,
+    actionButtonType: CollectionActionType,
+    onAction: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Text(title, style = MaterialTheme.typography.labelMedium)
+            if (isCollecting) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
+                ) {
+                    Text(
+                        "RUNNING",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
                 }
             }
+        }
+        Text(summary, style = MaterialTheme.typography.bodySmall)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.12f)),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.12f),
+        ) {
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            )
+        }
+        if (isCollecting) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        when (actionButtonType) {
+            CollectionActionType.FILLED_TONAL -> {
+                FilledTonalButton(
+                    onClick = onAction,
+                    enabled = isActionEnabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = actionContentDescription },
+                ) {
+                    Text(actionLabel)
+                }
+            }
+
+            CollectionActionType.OUTLINED -> {
+                Button(
+                    onClick = onAction,
+                    enabled = isActionEnabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = actionContentDescription },
+                ) {
+                    Text(actionLabel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardScoreReasonPanel(
+    reason: ScoreReason,
+    onOpenScoreReasonClick: (ScoreReason) -> Unit,
+) {
+    val isSensitivePermissionReason = reason.rule.isSensitivePermissionWarning()
+    val isCriticalSignal = reason.rule.isCriticalWarning()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isCriticalSignal) {
+                    Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.error,
+                        MaterialTheme.shapes.small,
+                    )
+                } else {
+                    Modifier
+                },
+            ),
+        color = if (isCriticalSignal) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f)
+        } else if (isSensitivePermissionReason) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+        },
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (isSensitivePermissionReason) {
+                        "Permission signal"
+                    } else {
+                        "Behavior signal"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isSensitivePermissionReason) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+                if (isCriticalSignal) {
+                    Text(
+                        "Critical",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text(
+                    "-${reason.delta}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Text(reason.message, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = "${reason.evidenceEventIds.size} evidence event(s)",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Button(
+                onClick = { onOpenScoreReasonClick(reason) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "Open score evidence for ${reason.packageName}"
+                    },
+            ) {
+                Text(
+                    if (isSensitivePermissionReason) {
+                        "Review permission evidence"
+                    } else {
+                        "Open evidence"
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardAlertPanel(
+    alert: PrivacyAlert,
+    onOpenAlertClick: (PrivacyAlert) -> Unit,
+    onOpenAlertProfileClick: (String) -> Unit,
+) {
+    val isSensitivePermissionWarning = alert.rule.isSensitivePermissionWarning()
+    val isCriticalAlert = alert.rule.isCriticalWarning()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isCriticalAlert) {
+                    Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.error,
+                        MaterialTheme.shapes.small,
+                    )
+                } else {
+                    Modifier
+                },
+            ),
+        color = if (isCriticalAlert) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+        } else if (isSensitivePermissionWarning) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+        },
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (isSensitivePermissionWarning) {
+                        "Permission warning"
+                    } else {
+                        "Behavior alert"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isSensitivePermissionWarning) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+                if (isCriticalAlert) {
+                    Text(
+                        "Critical",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text(
+                    "-${alert.triggerDelta}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Text(alert.message, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = "Triggered: ${formatAlertTimestamp(alert.triggeredAt)}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = { onOpenAlertClick(alert) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "Open alert evidence for ${alert.packageName}"
+                    },
+            ) {
+                Text("Open supporting evidence")
+            }
+            if (isSensitivePermissionWarning) {
+                OutlinedButton(
+                    onClick = { onOpenAlertProfileClick(alert.packageName) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = "Open app profile from alert ${alert.packageName}"
+                        },
+                ) {
+                    Text("Open app profile")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonitorEventRow(
+    header: String,
+    title: String,
+    detail: String,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.20f),
+                shape = MaterialTheme.shapes.small,
+            ),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                header,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -1385,6 +1788,80 @@ private fun scoreBadgeForPrivacyScore(score: Int): ScoreBadgeVisual {
             label = "RISK",
             textColor = Color(0xFFFF6B6B),
         )
+    }
+}
+
+@Composable
+private fun MonitorSignalChip(
+    reason: ScoreReason,
+    onOpenScoreReasonClick: (ScoreReason) -> Unit,
+) {
+    val isCriticalSignal = reason.rule.isCriticalWarning()
+    val isSensitivePermissionSignal = reason.rule.isSensitivePermissionWarning()
+    Surface(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .clickable { onOpenScoreReasonClick(reason) }
+            .semantics {
+                contentDescription = "Open score evidence for ${shortAppLabel(reason.packageName)}"
+            },
+        shape = MaterialTheme.shapes.small,
+        color = if (isCriticalSignal) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.24f)
+        } else if (isSensitivePermissionSignal) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        },
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                shortAppLabel(reason.packageName),
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Text(
+                "${reason.rule.description} · -${reason.delta}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "Open evidence",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+private fun shortAppLabel(packageName: String): String {
+    if (packageName.isBlank()) {
+        return "Unknown"
+    }
+    return packageName.substring(packageName.lastIndexOf('.') + 1).ifBlank { packageName }
+}
+
+@Composable
+private fun MonitorStatusBadge(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(label, style = MaterialTheme.typography.labelSmall)
+            Text(value, style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
 

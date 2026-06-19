@@ -14,5 +14,11 @@ enum class ScoringRule(val delta: Int, val description: String) {
         return this == SensitivePermissionAdded || this == NewAppWithSensitivePermissions
     }
 
+    fun isCriticalWarning(): Boolean {
+        return this == SensitivePermissionAdded ||
+            this == NewAppWithSensitivePermissions ||
+            this == HighBackgroundNetwork
+    }
+
     override fun toString(): String = description
 }

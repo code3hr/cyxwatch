@@ -326,10 +326,11 @@ Statuses are `todo`, `in_progress`, `blocked`, and `done`.
 ## Current Phase
 
 - Current status: MVP baseline with monitor-style UX and release pipeline are complete.
+- Cleanup candidates created during UX polish are tracked in `docs/toclean.md`.
 - CYX-301, CYX-302, CYX-303, CYX-401, and CYX-402 are implemented and verified with `testDebugUnitTest`, `assembleDebug`, and service-lifecycle lint/build checks.
 - CYX-501, CYX-502, CYX-601, CYX-602, CYX-701, and CYX-702 are implemented.
 - CYX-801 and CYX-802 are implemented and verification tasks have been run for new checks.
-- CYX-901, CYX-902, CYX-903, CYX-905, CYX-906 and CYX-907 are implemented.
+- CYX-901, CYX-902, CYX-903, CYX-904, CYX-905, CYX-906, CYX-907, CYX-911, CYX-912 and CYX-913 are implemented.
 
 ## Epic 9 - UX Polish and Safety Feedback
 
@@ -437,3 +438,81 @@ Statuses are `todo`, `in_progress`, `blocked`, and `done`.
     - A valid GitHub release can be created by pushing a tag and includes an APK artifact.
     - Release process documents package name, build path, and version.
   - Status: `done`
+
+## Epic 10 - Launch Gate and Res-driven UX
+
+- CYX-910: Add first-launch launch gate
+  - Scope:
+    - Add one-time "login-style" setup screen using `Res/login.png` as behavior reference.
+    - Add CTA paths for "Start monitoring" and "View privacy controls."
+    - Persist launch completion so first-run setup is not shown again.
+  - Files:
+    - `app/src/main/kotlin/com/cyxwatch/app/data/settings/LaunchGateSettingsState.kt`
+    - `app/src/main/kotlin/com/cyxwatch/app/data/settings/LaunchGateSettingsRepository.kt`
+    - `app/src/main/kotlin/com/cyxwatch/app/ui/LaunchGateScreen.kt`
+    - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
+  - Acceptance:
+    - New users see the launch gate before first monitoring action.
+    - Existing users with usage access enabled are not blocked by the new gate.
+  - Status: `done`
+
+- CYX-914: Refine app profile monitor card and permissions view
+  - Scope:
+    - Bring app profile to the same high-density monitor language as dashboard and reports.
+    - Add Top/Bottom navigation for long permission lists.
+    - Show permission posture and sensitive-permission actions clearly.
+  - Files:
+    - `app/src/main/kotlin/com/cyxwatch/app/ui/AppProfileScreen.kt`
+    - `app/src/androidTest/java/com/cyxwatch/app/ui/AppProfileScreenTest.kt`
+  - Acceptance:
+    - Permission posture is visible at a glance.
+    - Sensitive permissions are clearly actionable and lead to timeline evidence.
+  - Status: `done`
+
+- CYX-911: Res-driven monitor/report/dashboard refresh
+  - Scope:
+    - Refine dashboard visual language toward `Res/dashboard.jpg` and `Res/monitor` references.
+    - Improve density and scanability without changing collection semantics.
+  - Files:
+    - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
+    - `app/src/main/kotlin/com/cyxwatch/app/ui/*.kt`
+  - Acceptance:
+    - Dashboard remains actionable and clearly maps to evidence states.
+  - Status: `done`
+  - Progress:
+    - Dashboard already includes monitor-style score/risk/consent tiles, live VPN telemetry, throughput visualization, and endpoint usage bars.
+    - Dashboard top score reasons now render as compact signal panels with severity-aware styling and direct evidence actions.
+    - Dashboard signal and alert panels are now private composables to reduce `DashboardShell` complexity.
+    - Dashboard scroll navigation now uses the shared scroll-control helper.
+    - Scroll navigation controls were upgraded with compact monitor-style `Top` / `Bottom` controls for better discoverability in long screens.
+    - Added monitor-style top-signal chips in the dashboard header to make critical active risks scannable at a glance.
+    - Dashboard visual hierarchy now includes stable scan cards for live observability, collection actions, retention, score, and alerts.
+
+- CYX-912: Res-driven settings and privacy controls refresh
+  - Scope:
+    - Align privacy/permission controls wording and structure to `Res/setting.png`.
+  - Files:
+    - `app/src/main/kotlin/com/cyxwatch/app/ui/TransparencySettingsScreen.kt`
+  - Acceptance:
+    - Settings provide clearer control model for consent, retention, and visibility modes.
+  - Status: `done`
+  - Progress:
+    - Completed badge-first control surface for mode/privacy/consent state, plus private settings card split for visibility, diagnostics, retention, access, and loaded evidence.
+    - Added shared scroll navigation and compact diagnostics metrics for long-screen discoverability.
+    - Added clear copy and local-only boundaries so VPN behavior is explicit and non-misleading.
+
+- CYX-913: Res-driven alerts and report refresh
+  - Scope:
+    - Improve alerts/report cards and timeline surfaces using `Res/alert.jpg` and `Res/report.jpg`.
+  - Files:
+    - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
+    - `app/src/main/kotlin/com/cyxwatch/app/ui/ScoreEvidenceScreen.kt`
+    - `app/src/main/kotlin/com/cyxwatch/app/ui/DailySummaryScreen.kt`
+  - Acceptance:
+    - Critical warnings are visually prominent with quick actions.
+  - Status: `done`
+  - Progress:
+    - Added critical visual hierarchy to sensitive/high-priority signal and alert cards across dashboard and daily summary.
+    - Added a criticality strip in score evidence headers and strengthened the signal context for sensitive warning evidence.
+    - Daily summary risk and alert panels now include explicit critical markers while keeping direct evidence/action paths intact.
+    - Dashboard, summary, and score evidence surfaces now consistently surface quick actions for sensitive permission warnings.

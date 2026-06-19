@@ -71,6 +71,10 @@ class TransparencySettingsScreenTest {
         composeRule.onNodeWithContentDescription("Enable advanced network visibility").performClick()
         composeRule.onNodeWithContentDescription("Set retention window to 7 days").performClick()
         composeRule.onNodeWithContentDescription("Set retention window to 30 days").performClick()
+        composeRule.onNodeWithText("Loaded evidence").assertExists()
+        composeRule.onNodeWithText("Usage").assertExists()
+        composeRule.onNodeWithText("Inventory").assertExists()
+        composeRule.onNodeWithText("Network").assertExists()
 
         assertTrue(backClicked)
         assertTrue(vpnModeEnabled)
@@ -283,5 +287,52 @@ class TransparencySettingsScreenTest {
         composeRule.onNodeWithText(
             "Note: packet payloads are never captured in VPN visibility. It is a local monitoring mode, not a private network tunnel.",
         ).assertExists()
+    }
+
+    @Test
+    fun long_privacy_settings_expose_scroll_control() {
+        composeRule.setContent {
+            TransparencySettingsScreen(
+                hasUsageAccess = true,
+                consentState = UsageAccessConsentState(
+                    hasEverGranted = true,
+                    hasEverDenied = false,
+                    checkCount = 5,
+                    deniedCount = 0,
+                    lastCheckedAtEpochMs = 1_700_000_000_000L,
+                    lastSettingsOpenedAtEpochMs = 1_700_100_000_000L,
+                ),
+                lastCheckedLabel = "Jun 14, 2026 12:00",
+                lastSettingsOpenedLabel = "Jun 14, 2026 12:01",
+                isVpnModeEnabled = true,
+                onEnableVpnModeClick = {},
+                onDisableVpnModeClick = {},
+                vpnEnabledAtLabel = "Jun 14, 2026 12:00",
+                vpnDisabledAtLabel = "Jun 14, 2026 11:00",
+                retentionSettings = RetentionSettings(retentionDays = 14),
+                retentionStatus = "Retention window: 14 days.",
+                allowedRetentionDays = listOf(7, 14, 30),
+                loadedUsageEventCount = 1,
+                loadedInventoryEventCount = 2,
+                loadedNetworkEventCount = 3,
+                vpnPacketsObserved = 12L,
+                vpnBytesObserved = 1280L,
+                vpnUniqueDestinationCount = 2,
+                vpnParsedPacketsObserved = 11L,
+                vpnUnparsedPacketsObserved = 1L,
+                vpnCaptureMode = "monitor-only",
+                vpnForwardingEnabled = false,
+                vpnForwardingRequested = true,
+                vpnForwardingSupported = false,
+                onToggleVpnForwardingModeClick = {},
+                onRetentionDaysClick = {},
+                onPruneNowClick = {},
+                onDeleteLoadedEventsClick = {},
+                onRefreshVpnDiagnosticsClick = {},
+                onBack = {},
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Scroll to bottom of privacy settings").assertExists()
     }
 }

@@ -59,4 +59,39 @@ class ScoreEvidenceScreenTest {
 
         assertTrue(backClicked)
     }
+
+    @Test
+    fun shows_scroll_controls_for_long_evidence() {
+        composeRule.setContent {
+            ScoreEvidenceScreen(
+                reason = ScoreReason(
+                    rule = ScoringRule.ScreenOffAppActivity,
+                    message = "app active while screen was off",
+                    packageName = "com.example.app",
+                    delta = ScoringRule.ScreenOffAppActivity.delta,
+                    evidenceEventIds = (1..18).map { "evt-$it" },
+                ),
+                evidenceEvents = (1..18).map { index ->
+                    PrivacyEvent(
+                        eventId = "evt-$index",
+                        timestamp = Instant.parse("2026-06-14T09:%02d:00Z".format(index)),
+                        packageName = "com.example.app",
+                        eventType = EventType.APP_FOREGROUND,
+                        severity = Severity.LOW,
+                        source = "UsageStats",
+                        title = "event $index",
+                        explanation = "event explanation $index",
+                        evidenceJson = "{}",
+                    )
+                },
+                onBack = {},
+                appLabelsByPackageName = mapOf("com.example.app" to "Example App"),
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Scroll to bottom of score evidence").assertExists()
+        composeRule.onNodeWithContentDescription("Scroll to bottom of score evidence").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Scroll to top of score evidence").assertExists()
+    }
 }

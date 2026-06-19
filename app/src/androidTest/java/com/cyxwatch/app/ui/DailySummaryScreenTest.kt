@@ -133,15 +133,16 @@ class DailySummaryScreenTest {
             )
         }
 
-        composeRule.onNodeWithText("Open evidence").assertExists()
+        composeRule.onNodeWithText("Review permission evidence").assertExists()
         composeRule.onNodeWithText("Open supporting evidence").assertExists()
         composeRule.onNodeWithText("App: Focus App (com.example.focus)", useUnmergedTree = true).assertExists()
         composeRule.onNodeWithText("Sensitive permissions: Camera", useUnmergedTree = true).assertExists()
-                composeRule.onNodeWithContentDescription("Open score reason evidence for com.example.focus").assertExists()
-                composeRule.onNodeWithContentDescription("Open alert evidence for com.example.focus").assertExists()
-                composeRule.onNodeWithContentDescription("Open app profile from alert com.example.focus").assertExists()
-                composeRule.onNodeWithContentDescription("Open app profile for com.example.focus").assertExists()
-                composeRule.onNodeWithContentDescription("Open app profile for com.example.missing").assertExists()
+        composeRule.onNodeWithText("Permission warning").assertExists()
+        composeRule.onNodeWithContentDescription("Open score reason evidence for com.example.focus").assertExists()
+        composeRule.onNodeWithContentDescription("Open alert evidence for com.example.focus").assertExists()
+        composeRule.onNodeWithContentDescription("Open app profile from alert com.example.focus").assertExists()
+        composeRule.onNodeWithContentDescription("Open app profile for com.example.focus").assertExists()
+        composeRule.onNodeWithContentDescription("Open app profile for com.example.missing").assertExists()
         composeRule.onNode(hasText("com.example.focus", substring = true)).assertIsEnabled()
         composeRule.onNode(hasText("com.example.missing", substring = true)).assertIsNotEnabled()
     }

@@ -1,12 +1,14 @@
 package com.cyxwatch.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -42,8 +44,20 @@ fun ScoreEvidenceScreen(
     appLabelsByPackageName: Map<String, String> = emptyMap(),
 ) {
     val signalLevel = signalLevelForRule(reason.rule)
+    val isSensitivePermissionReason = reason.rule.isSensitivePermissionWarning()
+    val isCriticalSignal = reason.rule.isCriticalWarning()
+    val listState = rememberLazyListState()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Score Evidence") }) }) { contentPadding ->
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Score Evidence") }) },
+        floatingActionButton = {
+            LazyListScrollNavigationControls(
+                listState = listState,
+                topContentDescription = "Scroll to top of score evidence",
+                bottomContentDescription = "Scroll to bottom of score evidence",
+            )
+        },
+    ) { contentPadding ->
         Column(
             modifier = Modifier
                 .padding(contentPadding)
@@ -58,6 +72,15 @@ fun ScoreEvidenceScreen(
             }
 
             Card(
+                modifier = if (isCriticalSignal) {
+                    Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.error,
+                        RoundedCornerShape(12.dp),
+                    )
+                } else {
+                    Modifier
+                },
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(1.dp),
             ) {
@@ -71,12 +94,26 @@ fun ScoreEvidenceScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         SignalBadge(level = signalLevel, label = signalLevelLabel(signalLevel))
+                        if (isCriticalSignal) {
+                            Text(
+                                "Critical",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                         Text(
                             "Signal: ${signalLevelLabel(signalLevel)}",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                     HorizontalDivider()
+                    if (isSensitivePermissionReason) {
+                        Text(
+                            "Permission warning",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     Text(
                         "App: ${appDisplayName(reason.packageName, appLabelsByPackageName)}",
                         style = MaterialTheme.typography.titleSmall,
@@ -105,7 +142,10 @@ fun ScoreEvidenceScreen(
             }
 
             Text("Evidence timeline", style = MaterialTheme.typography.titleSmall)
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 items(evidenceEvents) { event ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(
