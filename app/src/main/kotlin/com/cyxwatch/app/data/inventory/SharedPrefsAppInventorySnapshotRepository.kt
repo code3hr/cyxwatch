@@ -1,6 +1,7 @@
 package com.cyxwatch.app.data.inventory
 
 import android.content.Context
+import com.cyxwatch.app.data.EncryptedPreferencesStore
 import com.cyxwatch.app.domain.model.AppProfile
 import java.nio.charset.StandardCharsets
 import java.util.Base64
@@ -13,13 +14,13 @@ private const val PERMISSION_SEPARATOR = "\u001E"
 class SharedPrefsAppInventorySnapshotRepository(
     context: Context,
 ) : AppInventorySnapshotRepository {
-    private val sharedPreferences = context.getSharedPreferences(
-        SNAPSHOT_PREFERENCES_FILE,
-        Context.MODE_PRIVATE,
+    private val sharedPreferences = EncryptedPreferencesStore(
+        context = context,
+        preferenceFileName = SNAPSHOT_PREFERENCES_FILE,
     )
 
     override fun readSnapshot(): List<AppProfile> {
-        val serializedProfiles = sharedPreferences.getString(SNAPSHOT_KEY, "") ?: return emptyList()
+        val serializedProfiles = sharedPreferences.readString(SNAPSHOT_KEY, "")
         if (serializedProfiles.isBlank()) return emptyList()
 
         return serializedProfiles
@@ -34,9 +35,7 @@ class SharedPrefsAppInventorySnapshotRepository(
         val payload = profiles
             .sortedBy { it.packageName }
             .joinToString(separator = "\n") { it.toStorageLine() }
-        sharedPreferences.edit()
-            .putString(SNAPSHOT_KEY, payload)
-            .apply()
+        sharedPreferences.writeString(SNAPSHOT_KEY, payload)
     }
 
     private fun AppProfile.toStorageLine(): String {

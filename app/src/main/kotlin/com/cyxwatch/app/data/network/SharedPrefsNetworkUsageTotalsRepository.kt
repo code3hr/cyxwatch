@@ -1,6 +1,7 @@
 package com.cyxwatch.app.data.network
 
 import android.content.Context
+import com.cyxwatch.app.data.EncryptedPreferencesStore
 import com.cyxwatch.app.domain.model.NetworkUsageDailyTotals
 
 private const val NETWORK_USAGE_PREFERENCES_FILE = "cyxwatch_network_usage"
@@ -12,20 +13,19 @@ private const val PACKAGE_BYTES_SEPARATOR = ":"
 class SharedPrefsNetworkUsageTotalsRepository(
     context: Context,
 ) : NetworkUsageTotalsRepository {
-    private val sharedPreferences = context.getSharedPreferences(
-        NETWORK_USAGE_PREFERENCES_FILE,
-        Context.MODE_PRIVATE,
+    private val sharedPreferences = EncryptedPreferencesStore(
+        context = context,
+        preferenceFileName = NETWORK_USAGE_PREFERENCES_FILE,
     )
 
     override fun readLatestTotals(): NetworkUsageDailyTotals? {
-        val raw = sharedPreferences.getString(NETWORK_USAGE_LATEST_KEY, null) ?: return null
+        val raw = sharedPreferences.readString(NETWORK_USAGE_LATEST_KEY, "")
+        if (raw.isBlank()) return null
         return deserialize(raw)
     }
 
     override fun writeTotals(totals: NetworkUsageDailyTotals) {
-        sharedPreferences.edit()
-            .putString(NETWORK_USAGE_LATEST_KEY, serialize(totals))
-            .apply()
+        sharedPreferences.writeString(NETWORK_USAGE_LATEST_KEY, serialize(totals))
     }
 
     private fun serialize(totals: NetworkUsageDailyTotals): String {

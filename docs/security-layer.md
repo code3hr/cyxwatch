@@ -60,7 +60,7 @@ Its security layer must ensure:
 | --- | --- | --- |
 | Payload theft through VPN mode | Reduced | Not captured in V1; no forwarder. |
 | Hidden traffic manipulation | Reduced | No forwarding path active; service controls toggles and default noop forwarder. |
-| Untrusted state tampering | Medium | SharedPreferences are private to app but not encrypted. |
+| Untrusted state tampering | Reduced | Sensitive preference-backed state now uses `EncryptedSharedPreferences` (with backward-compatible migration from plaintext). |
 | Crash-driven DoS from collection loops | Medium | Collector reads are guarded by bounds checks and permission checks; service clears state on stop. |
 | Abuse via exported components | Low | No exported service/activity beyond launcher activity. |
 
@@ -68,7 +68,7 @@ Its security layer must ensure:
 
 Keep this list as the security layer completion set:
 
-- Replace plain `SharedPreferences` with `EncryptedSharedPreferences` for sensitive state (consent, retention, and inventory baselines).
+- Replace plain `SharedPreferences` with `EncryptedSharedPreferences` for sensitive state (consent, retention, and inventory baselines). (implemented)
 - Add tamper-resistant intent handling:
   - Validate external `Intent` extras in `MainActivity` before use.
 - Add explicit screen protection toggle:
@@ -93,4 +93,3 @@ When presenting CyxWatch to users, this mapping should be visible in documentati
 - Advanced visibility: `NetworkStatsManager` + optional VPN header metadata
 - What is not done: packet content capture, cloud upload, forwarding
 - What is done: local-only scoring/evidence and clear explanations tied to on-device data
-

@@ -5,9 +5,9 @@ This file is the implementation backlog for the security layer described in
 
 Statuses: `todo`, `in_progress`, `blocked`, `done`.
 
-## Phase A — Immediate hardening (P0)
+## Phase A - Immediate hardening (P0)
 
-- **SEC-001 — Add encrypted local storage for sensitive state**
+- **SEC-001 - Add encrypted local storage for sensitive state**
   - Scope:
     - Add `androidx.security:security-crypto` dependency.
     - Introduce an encrypted preferences helper in `app/src/main/kotlin/com/cyxwatch/app/data`.
@@ -20,9 +20,9 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
   - Acceptance:
     - Sensitive consent/configuration values are encrypted at rest with app lock-backed key alias.
     - Existing plain-text preference migration path is safe and backward-compatible.
-  - Status: `todo`
+  - Status: `done` (validated 2026-06-20 with local build)
 
-- **SEC-002 — Tighten notification and intent flow validation**
+- **SEC-002 - Tighten notification and intent flow validation**
   - Scope:
     - Validate external `Intent` extras before use in `MainActivity` and any launch path.
     - Accept only expected keys, types, and known rules/packages.
@@ -35,7 +35,7 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
     - Invalid extras are ignored and logged safely.
   - Status: `todo`
 
-- **SEC-003 — VPN service cleanup hardening**
+- **SEC-003 - VPN service cleanup hardening**
   - Scope:
     - Ensure `CyxWatchVpnService` calls foreground cleanup and packet stream/resource cleanup on all fail/exit paths.
     - Add defensive checks around VPN interface creation and worker startup.
@@ -45,9 +45,9 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
     - No leaked file descriptors/threads after rapid start/stop and permission errors.
   - Status: `todo`
 
-## Phase B — Privacy boundary clarity (P1)
+## Phase B - Privacy boundary clarity (P1)
 
-- **SEC-004 — Add explicit security/privacy impact docs in onboarding and release notes**
+- **SEC-004 - Add explicit security/privacy impact docs in onboarding and release notes**
   - Scope:
     - Add explicit copy in onboarding and settings:
       - no packet payload collection
@@ -63,7 +63,7 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
     - Wording is consistent in all public user-facing surfaces.
   - Status: `todo`
 
-- **SEC-005 — Add optional secure-screen mode**
+- **SEC-005 - Add optional secure-screen mode**
   - Scope:
     - Add user setting to enable secure report screens.
     - Apply/remove `FLAG_SECURE` for screens with sensitive evidence or permissions.
@@ -76,9 +76,9 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
     - Secure flag is active only for protected sessions/surfaces.
   - Status: `todo`
 
-## Phase C — Runtime integrity (P2)
+## Phase C - Runtime integrity (P2)
 
-- **SEC-006 — Add runtime integrity checks in release builds**
+- **SEC-006 - Add runtime integrity checks in release builds**
   - Scope:
     - Detect debug-locked runtime conditions (debuggable flag, known tamper flags where low-risk and reliable).
     - Gate high-risk flows (VPN start/permission actions) behind checks.
@@ -89,7 +89,7 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
     - Logging exists for blocked suspicious state.
   - Status: `todo`
 
-- **SEC-007 — Add crash-safe and permission-recovery tests for security paths**
+- **SEC-007 - Add crash-safe and permission-recovery tests for security paths**
   - Scope:
     - Unit/instrumented tests for:
       - malformed intent extras
@@ -110,4 +110,3 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
 - Sensitive local state is encrypted at rest.
 - Unsafe external inputs cannot alter app state without validation.
 - Security claims match implemented behavior at all documentation surfaces.
-
