@@ -119,7 +119,10 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CyxWatchApp() {
+fun CyxWatchApp(
+    pendingLaunchAction: LaunchAction? = null,
+    consumePendingLaunchAction: () -> Unit = {},
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val consentRepository = remember { UsageAccessConsentRepository(context) }
@@ -201,6 +204,58 @@ fun CyxWatchApp() {
     val privacyScore = privacyScoreCalculator.calculate(scoringEvents)
     val appLabelsByPackageName = lastInventoryProfiles
         .associate { it.packageName to it.label }
+
+    LaunchedEffect(pendingLaunchAction, lastInventoryProfiles, activeAlerts, hasUsageAccess) {
+        val action = pendingLaunchAction ?: return@LaunchedEffect
+
+        if (!hasUsageAccess && lastInventoryProfiles.isEmpty() && activeAlerts.isEmpty()) {
+            return@LaunchedEffect
+        }
+
+        val matchingProfile = lastInventoryProfiles.firstOrNull {
+            it.packageName == action.targetPackageName
+        }
+        val matchingAlert = action.targetRule
+            ?.let { targetRule ->
+                activeAlerts.firstOrNull { alert ->
+                    alert.packageName == action.targetPackageName && alert.rule == targetRule
+                }
+            }
+
+        if (matchingProfile == null && matchingAlert == null && lastInventoryProfiles.isEmpty()) {
+            return@LaunchedEffect
+        }
+
+        when {
+            matchingAlert != null -> {
+                selectedScoreReason = ScoreReason(
+                    rule = matchingAlert.rule,
+                    message = matchingAlert.message,
+                    packageName = matchingAlert.packageName,
+                    delta = matchingAlert.triggerDelta,
+                    evidenceEventIds = matchingAlert.evidenceEventIds,
+                )
+                selectedProfile = null
+                selectedPermissionForEvidence = null
+                selectedDailySummary = null
+                isTransparencySettingsOpen = false
+            }
+
+            matchingProfile != null -> {
+                selectedProfile = matchingProfile
+                selectedPermissionForEvidence = null
+                selectedScoreReason = null
+                selectedDailySummary = null
+                isTransparencySettingsOpen = false
+            }
+
+            else -> {
+                collectStatus = "Notification shortcut target is no longer available."
+            }
+        }
+
+        consumePendingLaunchAction()
+    }
 
     fun maybeNotifyUsageAccessMissing() {
         val now = System.currentTimeMillis()

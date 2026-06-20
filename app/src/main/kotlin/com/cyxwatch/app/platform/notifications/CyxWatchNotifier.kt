@@ -22,7 +22,8 @@ private const val CHANNEL_NAME = "CyxWatch Permission Warnings"
 private const val CHANNEL_DESCRIPTION = "Warning notifications for sensitive permission changes"
 private const val NOTIFICATION_ID_BASE = 8100
 private const val NOTIFICATION_ID_ACCESS_WARNING = 9200
-private const val EXTRA_ALERT_PACKAGE = "cyxwatch_open_package"
+const val EXTRA_ALERT_PACKAGE = "cyxwatch_open_package"
+const val EXTRA_ALERT_RULE = "cyxwatch_open_rule"
 
 class CyxWatchNotifier(
     private val context: Context,
@@ -41,7 +42,7 @@ class CyxWatchNotifier(
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(EXTRA_ALERT_PACKAGE, packageName)
-            putExtra("cyxwatch_open_rule", alert.rule.name)
+            putExtra(EXTRA_ALERT_RULE, alert.rule.name)
         }
 
         val pendingIntent = PendingIntent.getActivity(
