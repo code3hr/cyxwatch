@@ -54,6 +54,11 @@ android {
         if (!hasExplicitReleaseKeystore) {
             create("releaseDebugFallback") {
                 initWith(signingConfigs.getByName("debug"))
+                val fallbackDebugKeystore = File(
+                    System.getProperty("user.home"),
+                    ".android/debug.keystore"
+                )
+                storeFile = fallbackDebugKeystore
             }
         }
     }
@@ -84,6 +89,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
