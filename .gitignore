@@ -12,6 +12,9 @@
 /tmp/
 /tmp-gradle/
 /tmp-gradle2/
+/.gradle*/
+/tmp-gradle*/
+/.gradle*
 /build/
 /app/build/
 /local.properties

@@ -3,6 +3,7 @@ package com.cyxwatch.app.ui
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertTrue
@@ -35,6 +36,8 @@ class UsageAccessScreenTest {
         composeRule.onNodeWithContentDescription("Open usage access settings").performClick()
         composeRule.onNodeWithContentDescription("Recheck usage access status").performClick()
         composeRule.onNodeWithContentDescription("Scroll to bottom of usage access screen").assertExists()
+        composeRule.onNodeWithText("CyxWatch does not capture packet payloads, does not upload telemetry, and does not modify network traffic.").assertExists()
+        composeRule.onNodeWithText("Advanced VPN mode is visibility only and is not a private/anonymizing tunnel.").assertExists()
 
         assertTrue(openSettingsClicked)
         assertTrue(refreshClicked)

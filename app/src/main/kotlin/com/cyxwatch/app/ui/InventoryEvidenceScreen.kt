@@ -84,43 +84,53 @@ fun InventoryEvidenceScreen(
             }
 
             if (evidenceEvents.isEmpty()) {
-                Text("No recorded timeline evidence for this permission yet.")
-                return@Scaffold
-            }
-
-            Text("Evidence timeline", style = MaterialTheme.typography.titleSmall)
-            LazyColumn(
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(evidenceEvents) { event ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(event.title, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                text = "time: ${formatEvidenceTimestamp(event.timestamp)}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(
-                                text = "source: ${event.source}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            val eventSignalLevel = signalLevelForEventSeverity(event.severity)
-                            Text(
-                                "Signal: ${signalLevelLabel(eventSignalLevel)}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text("Evidence ID: ${event.eventId}", style = MaterialTheme.typography.bodySmall)
-                            Text(event.explanation, style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                text = event.evidenceJson,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 6,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+                    ),
+                ) {
+                    Text(
+                        "No recorded timeline evidence for this permission yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            } else {
+                Text("Evidence timeline", style = MaterialTheme.typography.titleSmall)
+                LazyColumn(
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(evidenceEvents) { event ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(event.title, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    text = "time: ${formatEvidenceTimestamp(event.timestamp)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    text = "source: ${event.source}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                val eventSignalLevel = signalLevelForEventSeverity(event.severity)
+                                Text(
+                                    "Signal: ${signalLevelLabel(eventSignalLevel)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text("Evidence ID: ${event.eventId}", style = MaterialTheme.typography.bodySmall)
+                                Text(event.explanation, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    text = event.evidenceJson,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 6,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }

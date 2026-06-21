@@ -1,7 +1,5 @@
 package com.cyxwatch.app.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,7 +20,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,18 +67,10 @@ fun ScoreEvidenceScreen(
                 Text("Back")
             }
 
-            Card(
-                modifier = if (isCriticalSignal) {
-                    Modifier.border(
-                        1.dp,
-                        MaterialTheme.colorScheme.error,
-                        RoundedCornerShape(12.dp),
-                    )
-                } else {
-                    Modifier
-                },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(1.dp),
+            ScorePanelSurface(
+                isCritical = isCriticalSignal,
+                isSensitive = isSensitivePermissionReason,
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -93,7 +81,7 @@ fun ScoreEvidenceScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        SignalBadge(level = signalLevel, label = signalLevelLabel(signalLevel))
+                        SignalLevelBadge(level = signalLevel, label = signalLevelLabel(signalLevel), horizontalPadding = 8)
                         if (isCriticalSignal) {
                             Text(
                                 "Critical",
@@ -137,42 +125,57 @@ fun ScoreEvidenceScreen(
             }
 
             if (evidenceEvents.isEmpty()) {
-                Text("No matching evidence events are currently loaded.")
-                return@Scaffold
-            }
-
-            Text("Evidence timeline", style = MaterialTheme.typography.titleSmall)
-            LazyColumn(
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(evidenceEvents) { event ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+                    ),
+                ) {
+                    Text(
+                        "No matching evidence events are currently loaded.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            } else {
+                Text("Evidence timeline", style = MaterialTheme.typography.titleSmall)
+                LazyColumn(
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(evidenceEvents) { event ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
+                            ),
                         ) {
-                            Text(event.title, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                text = "${formatEvidenceTimestamp(event.timestamp)} | ${event.source}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(event.explanation, style = MaterialTheme.typography.bodyMedium)
-                            val eventSignalLevel = signalLevelForEventSeverity(event.severity)
-                            Text(
-                                "Event signal: ${signalLevelLabel(eventSignalLevel)}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(
-                                "Evidence ID: ${event.eventId}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(
-                                text = event.evidenceJson,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 6,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(event.title, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    text = "${formatEvidenceTimestamp(event.timestamp)} | ${event.source}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(event.explanation, style = MaterialTheme.typography.bodyMedium)
+                                val eventSignalLevel = signalLevelForEventSeverity(event.severity)
+                                Text(
+                                    "Event signal: ${signalLevelLabel(eventSignalLevel)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    "Evidence ID: ${event.eventId}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    text = event.evidenceJson,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 6,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
@@ -187,27 +190,3 @@ private fun formatEvidenceTimestamp(timestamp: Instant): String {
     return formatter.format(timestamp)
 }
 
-@Composable
-private fun SignalBadge(
-    level: SignalLevel,
-    label: String,
-) {
-    val background = when (level) {
-        SignalLevel.HIGH -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
-        SignalLevel.MEDIUM -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
-        SignalLevel.LOW -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
-    }
-    val textColor = when (level) {
-        SignalLevel.HIGH -> MaterialTheme.colorScheme.onErrorContainer
-        SignalLevel.MEDIUM -> MaterialTheme.colorScheme.onTertiaryContainer
-        SignalLevel.LOW -> MaterialTheme.colorScheme.onSecondaryContainer
-    }
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(background)
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-    ) {
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = textColor)
-    }
-}

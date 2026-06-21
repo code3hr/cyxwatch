@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.cyxwatch.app.domain.ScoringRule
 import com.cyxwatch.app.platform.notifications.EXTRA_ALERT_PACKAGE
 import com.cyxwatch.app.platform.notifications.EXTRA_ALERT_RULE
 
@@ -32,40 +31,28 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun parseLaunchAction(rawIntent: Intent): LaunchAction? {
-        val extras = rawIntent.extras ?: return null
-
-        val targetPackageName = extras.getString(EXTRA_ALERT_PACKAGE)
-            ?.trim()
-            ?.takeIf { isValidPackageName(it) }
-            ?: run {
-                if (extras.containsKey(EXTRA_ALERT_PACKAGE)) {
-                    Log.w(TAG, "Ignoring launch extra because package name is missing or invalid.")
-                }
-                return null
+        val parsedAction = LaunchActionParser.parse(rawIntent.extras)
+        if (parsedAction == null) {
+            if (rawIntent.extras != null) {
+                Log.w(TAG, "Ignoring malformed or unsupported launch action extras.")
             }
+            return null
+        }
 
-        val targetRule = extras.getString(EXTRA_ALERT_RULE)
-            ?.trim()
-            ?.let { rawRuleName ->
-                runCatching { ScoringRule.valueOf(rawRuleName) }
-                    .onFailure { throwable ->
-                        Log.w(TAG, "Ignoring invalid alert rule '$rawRuleName' for launch action.", throwable)
-                    }
-                    .getOrNull()
-            }
+        val targetPackageName = parsedAction.targetPackageName
+        if (rawIntent.extras?.containsKey(EXTRA_ALERT_RULE) == true) {
+            Log.d(
+                TAG,
+                "Parsed launch action for package=$targetPackageName rule=${parsedAction.targetRule}",
+            )
+        } else {
+            Log.d(TAG, "Parsed launch action for package=$targetPackageName")
+        }
 
-        return LaunchAction(
-            targetPackageName = targetPackageName,
-            targetRule = targetRule,
-        )
-    }
-
-    private fun isValidPackageName(value: String): Boolean {
-        return PACKAGE_NAME_PATTERN.matches(value)
+        return parsedAction
     }
 
     companion object {
         private const val TAG = "CyxWatch"
-        private val PACKAGE_NAME_PATTERN = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
     }
 }

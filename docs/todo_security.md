@@ -33,7 +33,7 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
   - Acceptance:
     - Malformed intent payloads do not crash app.
     - Invalid extras are ignored and logged safely.
-  - Status: `todo`
+  - Status: `done` (validated 2026-06-21 with local build)
 
 - **SEC-003 - VPN service cleanup hardening**
   - Scope:
@@ -43,7 +43,7 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
     - `app/src/main/kotlin/com/cyxwatch/app/platform/network/CyxWatchVpnService.kt`
   - Acceptance:
     - No leaked file descriptors/threads after rapid start/stop and permission errors.
-  - Status: `todo`
+  - Status: `done` (validated 2026-06-21 with local build)
 
 ## Phase B - Privacy boundary clarity (P1)
 
@@ -61,7 +61,7 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
   - Acceptance:
     - Copy appears before users can enable VPN mode.
     - Wording is consistent in all public user-facing surfaces.
-  - Status: `todo`
+  - Status: `done` (validated 2026-06-21 with local build)
 
 - **SEC-005 - Add optional secure-screen mode**
   - Scope:
@@ -74,7 +74,7 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
   - Acceptance:
     - Setting is off by default and can be toggled.
     - Secure flag is active only for protected sessions/surfaces.
-  - Status: `todo`
+  - Status: `done` (validated 2026-06-21 with local build)
 
 ## Phase C - Runtime integrity (P2)
 
@@ -87,7 +87,7 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
   - Acceptance:
     - No user-visible behavior change in normal release usage.
     - Logging exists for blocked suspicious state.
-  - Status: `todo`
+  - Status: `done` (validated 2026-06-21 with local build)
 
 - **SEC-007 - Add crash-safe and permission-recovery tests for security paths**
   - Scope:
@@ -101,7 +101,12 @@ Statuses: `todo`, `in_progress`, `blocked`, `done`.
     - `app/src/androidTest/java/com/cyxwatch/app/ui/...`
   - Acceptance:
     - Tests fail before fix and pass after.
-  - Status: `todo`
+  - Progress:
+    - Added unit tests covering permission denial/recovery transitions (`UsageAccessConsentStateTest`).
+    - Added instrumented repository coverage for permission check persistence and recovery (`UsageAccessConsentRepositoryTest`).
+    - Added migration coverage for legacy clear-text usage-access preference keys (`UsageAccessConsentMigrationTest`).
+    - Added unit race-condition coverage for VPN worker lifecycle transitions (`VpnServiceWorkerLifecycleTest`).
+  - Status: `done` (validated 2026-06-21 with local build)
 
 ## Completion Criteria
 

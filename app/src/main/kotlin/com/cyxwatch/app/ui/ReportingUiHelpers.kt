@@ -1,5 +1,18 @@
 package com.cyxwatch.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import kotlin.math.max
 
 enum class SignalLevel {
@@ -66,4 +79,69 @@ fun appDisplayName(
 
 fun clampIndex(totalItemCount: Int, index: Int): Int {
     return max(0, minOf(totalItemCount - 1, index))
+}
+
+@Composable
+fun ScorePanelSurface(
+    isCritical: Boolean,
+    isSensitive: Boolean,
+    modifier: Modifier = Modifier,
+    criticalSurfaceColor: Color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.20f),
+    sensitiveSurfaceColor: Color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f),
+    defaultSurfaceColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = modifier.then(
+            if (isCritical) {
+                Modifier.border(
+                    1.dp,
+                    MaterialTheme.colorScheme.error,
+                    MaterialTheme.shapes.small,
+                )
+            } else {
+                Modifier
+            },
+        ),
+        color = when {
+            isCritical -> criticalSurfaceColor
+            isSensitive -> sensitiveSurfaceColor
+            else -> defaultSurfaceColor
+        },
+        shape = MaterialTheme.shapes.small,
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun SignalLevelBadge(
+    level: SignalLevel,
+    label: String,
+    modifier: Modifier = Modifier,
+    horizontalPadding: Int = 6,
+    verticalPadding: Int = 2,
+) {
+    val background = when (level) {
+        SignalLevel.HIGH -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+        SignalLevel.MEDIUM -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
+        SignalLevel.LOW -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+    }
+    val textColor = when (level) {
+        SignalLevel.HIGH -> MaterialTheme.colorScheme.onErrorContainer
+        SignalLevel.MEDIUM -> MaterialTheme.colorScheme.onTertiaryContainer
+        SignalLevel.LOW -> MaterialTheme.colorScheme.onSecondaryContainer
+    }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(background)
+            .padding(horizontal = horizontalPadding.dp, vertical = verticalPadding.dp),
+    ) {
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = textColor,
+        )
+    }
 }

@@ -37,6 +37,7 @@ fun UsageAccessScreen(
     deniedCount: Int,
     checkCount: Int,
     lastCheckedLabel: String,
+    runtimeIntegrityNotice: String? = null,
     onOpenSettingsClick: () -> Unit,
     onRefreshClick: () -> Unit,
 ) {
@@ -80,6 +81,21 @@ fun UsageAccessScreen(
                         "App activity visibility requires Usage Access permission.",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            runtimeIntegrityNotice?.takeIf { it.isNotBlank() }?.let { notice ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                    ),
+                ) {
+                    Text(
+                        notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(10.dp),
                     )
                 }
             }
@@ -137,6 +153,14 @@ fun UsageAccessScreen(
                     )
                     Text(
                         "CyxWatch does not capture packet payloads, does not upload telemetry, and does not modify network traffic.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "All processing remains local to this device. No payloads or analytics are sent to the cloud.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Advanced VPN mode is visibility only and is not a private/anonymizing tunnel.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     if (hasEverDenied) {

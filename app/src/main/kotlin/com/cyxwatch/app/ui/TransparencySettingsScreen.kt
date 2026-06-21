@@ -26,33 +26,59 @@ import androidx.compose.ui.unit.dp
 import com.cyxwatch.app.data.settings.UsageAccessConsentState
 import com.cyxwatch.app.domain.RetentionSettings
 
+data class TransparencySettingsUiState(
+    val hasUsageAccess: Boolean,
+    val consentState: UsageAccessConsentState,
+    val lastCheckedLabel: String,
+    val lastSettingsOpenedLabel: String,
+    val isVpnModeEnabled: Boolean,
+    val vpnEnabledAtLabel: String,
+    val vpnDisabledAtLabel: String,
+    val retentionSettings: RetentionSettings,
+    val retentionStatus: String,
+    val allowedRetentionDays: List<Int>,
+    val loadedUsageEventCount: Int,
+    val loadedInventoryEventCount: Int,
+    val loadedNetworkEventCount: Int,
+    val vpnPacketsObserved: Long,
+    val vpnBytesObserved: Long,
+    val vpnUniqueDestinationCount: Int,
+    val vpnParsedPacketsObserved: Long,
+    val vpnUnparsedPacketsObserved: Long,
+    val vpnCaptureMode: String,
+    val vpnForwardingEnabled: Boolean,
+    val vpnForwardingRequested: Boolean,
+    val vpnForwardingSupported: Boolean,
+    val isSecureScreenModeEnabled: Boolean,
+) {
+    val visibilityModeLabel: String
+        get() = if (isVpnModeEnabled) "ADVANCED" else "BASIC"
+
+    val visibilityModeDescription: String
+        get() = if (isVpnModeEnabled) "ADVANCED VISIBILITY" else "BASIC VISIBILITY"
+
+    val trafficModeLabel: String
+        get() = if (isVpnModeEnabled) "METADATA" else "APP SUMMARY"
+
+    val usageAccessLabel: String
+        get() = if (hasUsageAccess) "GRANTED" else "DENIED"
+
+    val vpnModeCopy: String
+        get() = if (isVpnModeEnabled) {
+            "Advanced VPN visibility mode is active."
+        } else {
+            "Network visibility is in basic mode."
+        }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransparencySettingsScreen(
-    hasUsageAccess: Boolean,
-    consentState: UsageAccessConsentState,
-    lastCheckedLabel: String,
-    lastSettingsOpenedLabel: String,
-    isVpnModeEnabled: Boolean,
+    state: TransparencySettingsUiState,
     onEnableVpnModeClick: () -> Unit,
     onDisableVpnModeClick: () -> Unit,
-    vpnEnabledAtLabel: String,
-    vpnDisabledAtLabel: String,
-    retentionSettings: RetentionSettings,
-    retentionStatus: String,
-    allowedRetentionDays: List<Int>,
-    loadedUsageEventCount: Int,
-    loadedInventoryEventCount: Int,
-    loadedNetworkEventCount: Int,
-    vpnPacketsObserved: Long,
-    vpnBytesObserved: Long,
-    vpnUniqueDestinationCount: Int,
-    vpnParsedPacketsObserved: Long,
-    vpnUnparsedPacketsObserved: Long,
-    vpnCaptureMode: String,
-    vpnForwardingEnabled: Boolean,
-    vpnForwardingRequested: Boolean,
-    vpnForwardingSupported: Boolean,
+    runtimeIntegrityNotice: String? = null,
+    onToggleSecureScreenModeClick: () -> Unit,
     onToggleVpnForwardingModeClick: (Boolean) -> Unit,
     onRetentionDaysClick: (Int) -> Unit,
     onPruneNowClick: () -> Unit,
@@ -60,8 +86,6 @@ fun TransparencySettingsScreen(
     onRefreshVpnDiagnosticsClick: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val visibilityLabel = if (isVpnModeEnabled) "ADVANCED" else "BASIC"
-    val visibilityStateCopy = if (isVpnModeEnabled) "ADVANCED VISIBILITY" else "BASIC VISIBILITY"
     val scrollState = rememberScrollState()
 
     Scaffold(
@@ -73,7 +97,7 @@ fun TransparencySettingsScreen(
                 bottomContentDescription = "Scroll to bottom of privacy settings",
             )
         },
-    ) { contentPadding ->
+        ) { contentPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -82,6 +106,21 @@ fun TransparencySettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            runtimeIntegrityNotice?.takeIf { it.isNotBlank() }?.let { notice ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                    ),
+                ) {
+                    Text(
+                        notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
+            }
+
             OutlinedButton(
                 onClick = onBack,
                 modifier = Modifier.semantics { contentDescription = "Back from privacy settings" },
@@ -97,8 +136,8 @@ fun TransparencySettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SettingStatusBadge(
                             label = "Mode",
-                            value = visibilityLabel,
-                            valueColor = if (isVpnModeEnabled) {
+                            value = state.visibilityModeLabel,
+                            valueColor = if (state.isVpnModeEnabled) {
                                 MaterialTheme.colorScheme.tertiary
                             } else {
                                 MaterialTheme.colorScheme.primary
@@ -115,8 +154,8 @@ fun TransparencySettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SettingStatusBadge(
                             label = "Usage access",
-                            value = if (hasUsageAccess) "GRANTED" else "DENIED",
-                            valueColor = if (hasUsageAccess) {
+                            value = state.usageAccessLabel,
+                            valueColor = if (state.hasUsageAccess) {
                                 MaterialTheme.colorScheme.tertiary
                             } else {
                                 MaterialTheme.colorScheme.error
@@ -125,12 +164,12 @@ fun TransparencySettingsScreen(
                         )
                         SettingStatusBadge(
                             label = "Retention",
-                            value = "${retentionSettings.retentionDays} day(s)",
+                            value = "${state.retentionSettings.retentionDays} day(s)",
                             modifier = Modifier.weight(1f),
                         )
                     }
                     Text("Privacy mode", style = MaterialTheme.typography.titleMedium)
-                    Text(visibilityStateCopy, style = MaterialTheme.typography.titleSmall)
+                    Text(state.visibilityModeDescription, style = MaterialTheme.typography.titleSmall)
                     Text(
                         "No cloud sync, telemetry upload, packet payload capture, or background VPN mode is enabled.",
                         style = MaterialTheme.typography.bodySmall,
@@ -139,52 +178,72 @@ fun TransparencySettingsScreen(
                         "Advanced network visibility is for local traffic transparency only and is not a private/anonymous VPN.",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    Text(
+                        "All processing and storage remain on-device. No cloud sync or packet payload collection.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Secure screen mode ${if (state.isSecureScreenModeEnabled) "is enabled" else "is disabled"}",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        if (state.isSecureScreenModeEnabled) {
+                            "Screens with sensitive evidence and permission details block screenshots and screen recording."
+                        } else {
+                            "Enable secure mode to block screenshots and screen recording on sensitive screens."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(
+                        onClick = onToggleSecureScreenModeClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                contentDescription = if (state.isSecureScreenModeEnabled) {
+                                    "Disable secure screen mode"
+                                } else {
+                                    "Enable secure screen mode"
+                                }
+                            },
+                    ) {
+                        Text(
+                            if (state.isSecureScreenModeEnabled) {
+                                "Disable secure screen mode"
+                            } else {
+                                "Enable secure screen mode"
+                            },
+                        )
+                    }
                 }
             }
 
             NetworkVisibilitySettingsCard(
-                isVpnModeEnabled = isVpnModeEnabled,
-                vpnEnabledAtLabel = vpnEnabledAtLabel,
-                vpnDisabledAtLabel = vpnDisabledAtLabel,
+                state = state,
                 onEnableVpnModeClick = onEnableVpnModeClick,
                 onDisableVpnModeClick = onDisableVpnModeClick,
             )
 
             AdvancedVisibilityDiagnosticsCard(
-                isVpnModeEnabled = isVpnModeEnabled,
-                vpnPacketsObserved = vpnPacketsObserved,
-                vpnBytesObserved = vpnBytesObserved,
-                vpnUniqueDestinationCount = vpnUniqueDestinationCount,
-                vpnParsedPacketsObserved = vpnParsedPacketsObserved,
-                vpnUnparsedPacketsObserved = vpnUnparsedPacketsObserved,
-                vpnCaptureMode = vpnCaptureMode,
-                vpnForwardingEnabled = vpnForwardingEnabled,
-                vpnForwardingRequested = vpnForwardingRequested,
-                vpnForwardingSupported = vpnForwardingSupported,
+                state = state,
                 onToggleVpnForwardingModeClick = onToggleVpnForwardingModeClick,
                 onRefreshVpnDiagnosticsClick = onRefreshVpnDiagnosticsClick,
             )
 
             RetentionSettingsCard(
-                retentionSettings = retentionSettings,
-                retentionStatus = retentionStatus,
-                allowedRetentionDays = allowedRetentionDays,
+                state = state,
                 onRetentionDaysClick = onRetentionDaysClick,
                 onPruneNowClick = onPruneNowClick,
                 onDeleteLoadedEventsClick = onDeleteLoadedEventsClick,
             )
 
             UsageAccessStatusCard(
-                hasUsageAccess = hasUsageAccess,
-                consentState = consentState,
-                lastCheckedLabel = lastCheckedLabel,
-                lastSettingsOpenedLabel = lastSettingsOpenedLabel,
+                state = state,
             )
 
             LoadedEvidenceCard(
-                loadedUsageEventCount = loadedUsageEventCount,
-                loadedInventoryEventCount = loadedInventoryEventCount,
-                loadedNetworkEventCount = loadedNetworkEventCount,
+                loadedUsageEventCount = state.loadedUsageEventCount,
+                loadedInventoryEventCount = state.loadedInventoryEventCount,
+                loadedNetworkEventCount = state.loadedNetworkEventCount,
             )
         }
     }
@@ -192,9 +251,7 @@ fun TransparencySettingsScreen(
 
 @Composable
 private fun NetworkVisibilitySettingsCard(
-    isVpnModeEnabled: Boolean,
-    vpnEnabledAtLabel: String,
-    vpnDisabledAtLabel: String,
+    state: TransparencySettingsUiState,
     onEnableVpnModeClick: () -> Unit,
     onDisableVpnModeClick: () -> Unit,
 ) {
@@ -212,8 +269,8 @@ private fun NetworkVisibilitySettingsCard(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SettingStatusBadge(
                     label = "Mode",
-                    value = if (isVpnModeEnabled) "ADVANCED" else "BASIC",
-                    valueColor = if (isVpnModeEnabled) {
+                    value = state.visibilityModeLabel,
+                    valueColor = if (state.isVpnModeEnabled) {
                         MaterialTheme.colorScheme.tertiary
                     } else {
                         MaterialTheme.colorScheme.primary
@@ -222,29 +279,26 @@ private fun NetworkVisibilitySettingsCard(
                 )
                 SettingStatusBadge(
                     label = "Traffic mode",
-                    value = if (isVpnModeEnabled) "METADATA" else "APP SUMMARY",
+                    value = state.trafficModeLabel,
                     modifier = Modifier.weight(1f),
                 )
             }
-            Text(
-                if (isVpnModeEnabled) {
-                    "Advanced VPN visibility mode is active."
-                } else {
-                    "Network visibility is in basic mode."
-                },
-                style = MaterialTheme.typography.bodySmall,
-            )
+            Text(state.vpnModeCopy, style = MaterialTheme.typography.bodySmall)
             Text(
                 "This mode is for endpoint metadata visibility and does not secure, hide, or reroute your traffic.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (vpnEnabledAtLabel.isNotBlank()) {
-                Text("Enabled at: $vpnEnabledAtLabel", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "This is local monitoring only. It does not provide anonymity or traffic tunneling.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (state.vpnEnabledAtLabel.isNotBlank()) {
+                Text("Enabled at: ${state.vpnEnabledAtLabel}", style = MaterialTheme.typography.bodySmall)
             }
-            if (vpnDisabledAtLabel.isNotBlank()) {
-                Text("Disabled at: $vpnDisabledAtLabel", style = MaterialTheme.typography.bodySmall)
+            if (state.vpnDisabledAtLabel.isNotBlank()) {
+                Text("Disabled at: ${state.vpnDisabledAtLabel}", style = MaterialTheme.typography.bodySmall)
             }
-            if (isVpnModeEnabled) {
+            if (state.isVpnModeEnabled) {
                 Button(
                     onClick = onDisableVpnModeClick,
                     modifier = Modifier
@@ -269,16 +323,7 @@ private fun NetworkVisibilitySettingsCard(
 
 @Composable
 private fun AdvancedVisibilityDiagnosticsCard(
-    isVpnModeEnabled: Boolean,
-    vpnPacketsObserved: Long,
-    vpnBytesObserved: Long,
-    vpnUniqueDestinationCount: Int,
-    vpnParsedPacketsObserved: Long,
-    vpnUnparsedPacketsObserved: Long,
-    vpnCaptureMode: String,
-    vpnForwardingEnabled: Boolean,
-    vpnForwardingRequested: Boolean,
-    vpnForwardingSupported: Boolean,
+    state: TransparencySettingsUiState,
     onToggleVpnForwardingModeClick: (Boolean) -> Unit,
     onRefreshVpnDiagnosticsClick: () -> Unit,
 ) {
@@ -288,58 +333,58 @@ private fun AdvancedVisibilityDiagnosticsCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Advanced visibility diagnostics", style = MaterialTheme.typography.titleMedium)
-            if (isVpnModeEnabled) {
+            if (state.isVpnModeEnabled) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingStatusBadge(
                         label = "Packets",
-                        value = vpnPacketsObserved.toString(),
+                        value = state.vpnPacketsObserved.toString(),
                         modifier = Modifier.weight(1f),
                     )
                     SettingStatusBadge(
                         label = "Bytes",
-                        value = vpnBytesObserved.toString(),
+                        value = state.vpnBytesObserved.toString(),
                         modifier = Modifier.weight(1f),
                     )
                     SettingStatusBadge(
                         label = "Destinations",
-                        value = vpnUniqueDestinationCount.toString(),
+                        value = state.vpnUniqueDestinationCount.toString(),
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingStatusBadge(
                         label = "Parsed",
-                        value = vpnParsedPacketsObserved.toString(),
+                        value = state.vpnParsedPacketsObserved.toString(),
                         modifier = Modifier.weight(1f),
                     )
                     SettingStatusBadge(
                         label = "Unparsed",
-                        value = vpnUnparsedPacketsObserved.toString(),
+                        value = state.vpnUnparsedPacketsObserved.toString(),
                         modifier = Modifier.weight(1f),
                     )
                 }
-                Text("Collection mode: $vpnCaptureMode", style = MaterialTheme.typography.bodySmall)
+                Text("Collection mode: ${state.vpnCaptureMode}", style = MaterialTheme.typography.bodySmall)
                 Text(
-                    "Forwarding requested: ${if (vpnForwardingRequested) "enabled" else "disabled"}",
+                    "Forwarding requested: ${if (state.vpnForwardingRequested) "enabled" else "disabled"}",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(
-                    "Packet forwarding: ${if (vpnForwardingEnabled) "enabled" else "disabled"}",
+                    "Packet forwarding: ${if (state.vpnForwardingEnabled) "enabled" else "disabled"}",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                if (vpnForwardingRequested && !vpnForwardingEnabled) {
+                if (state.vpnForwardingRequested && !state.vpnForwardingEnabled) {
                     Text(
                         "Forwarding is not active in this build.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                if (vpnForwardingSupported) {
+                if (state.vpnForwardingSupported) {
                     Button(
-                        onClick = { onToggleVpnForwardingModeClick(!vpnForwardingRequested) },
+                        onClick = { onToggleVpnForwardingModeClick(!state.vpnForwardingRequested) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .semantics {
-                                contentDescription = if (vpnForwardingRequested) {
+                                contentDescription = if (state.vpnForwardingRequested) {
                                     "Disable VPN forwarding mode"
                                 } else {
                                     "Enable VPN forwarding mode"
@@ -347,7 +392,7 @@ private fun AdvancedVisibilityDiagnosticsCard(
                             },
                     ) {
                         Text(
-                            if (vpnForwardingRequested) {
+                            if (state.vpnForwardingRequested) {
                                 "Disable VPN forwarding mode"
                             } else {
                                 "Enable VPN forwarding mode"
@@ -382,9 +427,7 @@ private fun AdvancedVisibilityDiagnosticsCard(
 
 @Composable
 private fun RetentionSettingsCard(
-    retentionSettings: RetentionSettings,
-    retentionStatus: String,
-    allowedRetentionDays: List<Int>,
+    state: TransparencySettingsUiState,
     onRetentionDaysClick: (Int) -> Unit,
     onPruneNowClick: () -> Unit,
     onDeleteLoadedEventsClick: () -> Unit,
@@ -395,15 +438,15 @@ private fun RetentionSettingsCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Retention", style = MaterialTheme.typography.titleMedium)
-            Text(retentionStatus, style = MaterialTheme.typography.bodySmall)
-            allowedRetentionDays.forEach { days ->
+            Text(state.retentionStatus, style = MaterialTheme.typography.bodySmall)
+            state.allowedRetentionDays.forEach { days ->
                 Button(
                     onClick = { onRetentionDaysClick(days) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .semantics { contentDescription = "Set retention window to $days days" },
                 ) {
-                    val selected = if (retentionSettings.retentionDays == days) "Current" else "Set"
+                    val selected = if (state.retentionSettings.retentionDays == days) "Current" else "Set"
                     Text("$selected: $days days")
                 }
             }
@@ -429,10 +472,7 @@ private fun RetentionSettingsCard(
 
 @Composable
 private fun UsageAccessStatusCard(
-    hasUsageAccess: Boolean,
-    consentState: UsageAccessConsentState,
-    lastCheckedLabel: String,
-    lastSettingsOpenedLabel: String,
+    state: TransparencySettingsUiState,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -440,16 +480,16 @@ private fun UsageAccessStatusCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Usage access", style = MaterialTheme.typography.titleMedium)
-            Text(if (hasUsageAccess) "Granted" else "Not granted", style = MaterialTheme.typography.titleSmall)
+            Text(if (state.hasUsageAccess) "Granted" else "Not granted", style = MaterialTheme.typography.titleSmall)
             Text(
-                "Checks: ${consentState.checkCount}; denied: ${consentState.deniedCount}",
+                "Checks: ${state.consentState.checkCount}; denied: ${state.consentState.deniedCount}",
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (lastCheckedLabel.isNotBlank()) {
-                Text("Last checked: $lastCheckedLabel", style = MaterialTheme.typography.bodySmall)
+            if (state.lastCheckedLabel.isNotBlank()) {
+                Text("Last checked: ${state.lastCheckedLabel}", style = MaterialTheme.typography.bodySmall)
             }
-            if (lastSettingsOpenedLabel.isNotBlank()) {
-                Text("Settings opened: $lastSettingsOpenedLabel", style = MaterialTheme.typography.bodySmall)
+            if (state.lastSettingsOpenedLabel.isNotBlank()) {
+                Text("Settings opened: ${state.lastSettingsOpenedLabel}", style = MaterialTheme.typography.bodySmall)
             }
         }
     }

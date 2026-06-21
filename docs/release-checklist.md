@@ -13,6 +13,12 @@
 - [x] No network calls for telemetry, uploads, or analytics in code paths.
 - [x] VPN mode shows explicit active state and requires user action.
 - [x] No payload capture in V1.
+- [x] Onboarding and privacy settings explicitly state local-only boundaries:
+  - no packet payload collection
+  - no cloud upload/sync
+  - no on-device payload forwarding
+  - VPN visibility is monitoring only, not anonymity tunneling.
+- [x] Optional secure-screen mode is available for sensitive screens.
 
 ## Testing
 

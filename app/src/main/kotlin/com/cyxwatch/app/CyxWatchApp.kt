@@ -1,7 +1,10 @@
-package com.cyxwatch.app
+﻿package com.cyxwatch.app
 
 import android.app.Activity
+import com.cyxwatch.app.BuildConfig
 import android.net.VpnService
+import android.util.Log
+import android.view.WindowManager.LayoutParams.FLAG_SECURE
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -41,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +70,7 @@ import com.cyxwatch.app.data.inventory.SharedPrefsAppInventorySnapshotRepository
 import com.cyxwatch.app.data.network.SharedPrefsNetworkUsageTotalsRepository
 import com.cyxwatch.app.data.settings.RetentionSettingsRepository
 import com.cyxwatch.app.data.settings.LaunchGateSettingsRepository
+import com.cyxwatch.app.data.settings.SecureScreenSettingsRepository
 import com.cyxwatch.app.data.settings.VpnModeSettingsRepository
 import com.cyxwatch.app.data.settings.UsageAccessConsentRepository
 import com.cyxwatch.app.domain.BuildInventoryChangeEventsUseCase
@@ -97,6 +102,7 @@ import com.cyxwatch.app.platform.network.VpnTrafficDestination
 import com.cyxwatch.app.platform.network.VpnTrafficTotals
 import com.cyxwatch.app.platform.notifications.CyxWatchNotifier
 import com.cyxwatch.app.platform.permissions.UsageAccessPermissionStateProvider
+import com.cyxwatch.app.runtime.RuntimeIntegrityGuard
 import com.cyxwatch.app.platform.permissions.hasUsageAccess as hasUsageAccessGranted
 import com.cyxwatch.app.platform.permissions.openUsageAccessSettingsIntent
 import com.cyxwatch.app.platform.usage.AndroidUsageEventCollector
@@ -105,8 +111,10 @@ import com.cyxwatch.app.ui.DailySummaryScreen
 import com.cyxwatch.app.ui.InventoryEvidenceScreen
 import com.cyxwatch.app.ui.LaunchGateScreen
 import com.cyxwatch.app.ui.ScrollNavigationControls
+import com.cyxwatch.app.ui.ScorePanelSurface
 import com.cyxwatch.app.ui.ScoreEvidenceScreen
 import com.cyxwatch.app.ui.TransparencySettingsScreen
+import com.cyxwatch.app.ui.TransparencySettingsUiState
 import com.cyxwatch.app.ui.UsageAccessScreen
 import java.time.Instant
 import java.time.ZoneId
@@ -129,6 +137,7 @@ fun CyxWatchApp(
     val launchGateSettingsRepository = remember { LaunchGateSettingsRepository(context) }
     val vpnModeSettingsRepository = remember { VpnModeSettingsRepository(context) }
     val retentionSettingsRepository = remember { RetentionSettingsRepository(context) }
+    val secureScreenSettingsRepository = remember { SecureScreenSettingsRepository(context) }
     val usagePermissionStateProvider = remember { UsageAccessPermissionStateProvider(context) }
     val usageAccessCollectorUseCase = remember {
         CollectUsageEventsUseCase(
@@ -179,6 +188,14 @@ fun CyxWatchApp(
     var retentionSettings by remember { mutableStateOf(retentionSettingsRepository.readSettings()) }
     var retentionStatus by remember { mutableStateOf("Retention window: ${retentionSettings.retentionDays} days.") }
     var vpnModeState by remember { mutableStateOf(vpnModeSettingsRepository.readState()) }
+    var secureScreenSettingsState by remember { mutableStateOf(secureScreenSettingsRepository.readState()) }
+    var runtimeIntegrityBlockMessage by remember { mutableStateOf<String?>(null) }
+    val runtimeIntegrityGuard = remember {
+        RuntimeIntegrityGuard.create(
+            context = context,
+            isBuildDebuggable = BuildConfig.DEBUG,
+        )
+    }
     var lastUsageEvents by remember { mutableStateOf<List<PrivacyEvent>>(emptyList()) }
     var lastNetworkEvents by remember { mutableStateOf<List<PrivacyEvent>>(emptyList()) }
     var lastInventoryProfiles by remember { mutableStateOf<List<AppProfile>>(emptyList()) }
@@ -221,8 +238,27 @@ fun CyxWatchApp(
                     alert.packageName == action.targetPackageName && alert.rule == targetRule
                 }
             }
+        val hasKnownInventoryOrAlertTargets = lastInventoryProfiles.isNotEmpty() || activeAlerts.isNotEmpty()
+        val knownActionTargets = lastInventoryProfiles.map { it.packageName }
+            .toMutableSet()
+            .apply { addAll(activeAlerts.map { it.packageName }) }
+        val isKnownTargetPackage = knownActionTargets.contains(action.targetPackageName)
 
-        if (matchingProfile == null && matchingAlert == null && lastInventoryProfiles.isEmpty()) {
+        if (
+            matchingProfile == null &&
+            matchingAlert == null &&
+            hasKnownInventoryOrAlertTargets &&
+            !isKnownTargetPackage
+        ) {
+            Log.w(
+                "CyxWatch",
+                "Ignoring launch action for unknown or stale package=${action.targetPackageName}.",
+            )
+            consumePendingLaunchAction()
+            return@LaunchedEffect
+        }
+
+        if (matchingProfile == null && matchingAlert == null && !hasKnownInventoryOrAlertTargets) {
             return@LaunchedEffect
         }
 
@@ -250,7 +286,8 @@ fun CyxWatchApp(
             }
 
             else -> {
-                collectStatus = "Notification shortcut target is no longer available."
+                consumePendingLaunchAction()
+                return@LaunchedEffect
             }
         }
 
@@ -390,6 +427,23 @@ fun CyxWatchApp(
         }
     }
 
+    fun requireRuntimeIntegrity(
+        actionLabel: String,
+        action: () -> Unit,
+    ) {
+        val result = runtimeIntegrityGuard.canRunHighRiskAction(actionLabel)
+        if (result.isAllowed) {
+            runtimeIntegrityBlockMessage = null
+            action()
+        } else {
+            runtimeIntegrityBlockMessage = "Blocked by runtime integrity (${result.reasons.joinToString(", ")})"
+            Log.w(
+                "CyxWatch",
+                "Blocking high-risk action '$actionLabel' due to: ${result.reasons.joinToString(", ")}",
+            )
+        }
+    }
+
     val vpnConsentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -401,11 +455,13 @@ fun CyxWatchApp(
     }
 
     fun requestVpnModeEnable() {
-        val prepareIntent = VpnService.prepare(context)
-        if (prepareIntent == null) {
-            enableVpnMode()
-        } else {
-            vpnConsentLauncher.launch(prepareIntent)
+        requireRuntimeIntegrity(actionLabel = "vpn mode enable") {
+            val prepareIntent = VpnService.prepare(context)
+            if (prepareIntent == null) {
+                enableVpnMode()
+            } else {
+                vpnConsentLauncher.launch(prepareIntent)
+            }
         }
     }
 
@@ -423,9 +479,15 @@ fun CyxWatchApp(
         val wasVpnModeActive = vpnModeState.isEnabled
         vpnModeState = vpnModeSettingsRepository.setForwardingEnabled(enabled)
         if (wasVpnModeActive) {
-            CyxWatchVpnService.start(context)
+            requireRuntimeIntegrity(actionLabel = "vpn forwarding") {
+                CyxWatchVpnService.start(context)
+            }
         }
         syncVpnStateTotals()
+    }
+
+    fun setSecureScreenModeEnabled(enabled: Boolean) {
+        secureScreenSettingsState = secureScreenSettingsRepository.setEnabled(enabled)
     }
 
     LaunchedEffect(vpnModeState.isEnabled) {
@@ -433,6 +495,29 @@ fun CyxWatchApp(
         while (isActive && vpnModeState.isEnabled) {
             delay(800)
             refreshVpnLiveTelemetry()
+        }
+    }
+
+    val isProtectedEvidenceScreen = secureScreenSettingsState.isEnabled && (
+        selectedScoreReason != null ||
+        selectedPermissionForEvidence != null ||
+        selectedProfile != null ||
+        selectedDailySummary != null
+    )
+    val activity = LocalContext.current as? Activity
+
+    LaunchedEffect(activity, isProtectedEvidenceScreen) {
+        if (activity == null) return@LaunchedEffect
+        if (isProtectedEvidenceScreen) {
+            activity.window.setFlags(FLAG_SECURE, FLAG_SECURE)
+        } else {
+            activity.window.clearFlags(FLAG_SECURE)
+        }
+    }
+
+    DisposableEffect(activity) {
+        onDispose {
+            activity?.window?.clearFlags(FLAG_SECURE)
         }
     }
 
@@ -486,10 +571,13 @@ fun CyxWatchApp(
             ) { contentPadding ->
                 if (!launchGateState.hasCompletedLaunchGate && !hasUsageAccess) {
                     LaunchGateScreen(
+                        runtimeIntegrityNotice = runtimeIntegrityBlockMessage,
                         onStartMonitoringClick = {
                             completeLaunchGate(openedPrivacyControlsFromGate = false)
-                            consentRepository.recordSettingsOpened(System.currentTimeMillis())
-                            context.startActivity(openUsageAccessSettingsIntent())
+                            requireRuntimeIntegrity(actionLabel = "usage access settings") {
+                                consentRepository.recordSettingsOpened(System.currentTimeMillis())
+                                context.startActivity(openUsageAccessSettingsIntent())
+                            }
                         },
                         onOpenPrivacyControlsClick = {
                             completeLaunchGate(openedPrivacyControlsFromGate = true)
@@ -506,9 +594,12 @@ fun CyxWatchApp(
                         deniedCount = consentState.deniedCount,
                         checkCount = consentState.checkCount,
                         lastCheckedLabel = formatTimestamp(consentState.lastCheckedAtEpochMs),
+                        runtimeIntegrityNotice = runtimeIntegrityBlockMessage,
                         onOpenSettingsClick = {
-                            consentRepository.recordSettingsOpened(System.currentTimeMillis())
-                            context.startActivity(openUsageAccessSettingsIntent())
+                            requireRuntimeIntegrity(actionLabel = "usage access settings") {
+                                consentRepository.recordSettingsOpened(System.currentTimeMillis())
+                                context.startActivity(openUsageAccessSettingsIntent())
+                            }
                         },
                         onRefreshClick = {
                             hasUsageAccess = hasUsageAccessGranted(context)
@@ -522,9 +613,10 @@ fun CyxWatchApp(
                     selectedDailySummary == null &&
                     !isTransparencySettingsOpen
                 ) {
-                    DashboardShell(
+                        DashboardShell(
                         modifier = Modifier.padding(contentPadding),
                         collectionStatus = collectStatus,
+                        runtimeIntegrityNotice = runtimeIntegrityBlockMessage,
                         onCollectEventsClick = {
                             if (isCollectingUsage) return@DashboardShell
                             val now = Instant.now()
@@ -756,35 +848,42 @@ fun CyxWatchApp(
                         )
                 } else if (isTransparencySettingsOpen) {
                     TransparencySettingsScreen(
-                        hasUsageAccess = hasUsageAccess,
-                        consentState = consentState,
-                        lastCheckedLabel = formatTimestamp(consentState.lastCheckedAtEpochMs),
-                        lastSettingsOpenedLabel = formatTimestamp(consentState.lastSettingsOpenedAtEpochMs),
-                        isVpnModeEnabled = vpnModeState.isEnabled,
+                        state = TransparencySettingsUiState(
+                            hasUsageAccess = hasUsageAccess,
+                            consentState = consentState,
+                            lastCheckedLabel = formatTimestamp(consentState.lastCheckedAtEpochMs),
+                            lastSettingsOpenedLabel = formatTimestamp(consentState.lastSettingsOpenedAtEpochMs),
+                            isVpnModeEnabled = vpnModeState.isEnabled,
+                            vpnEnabledAtLabel = formatTimestamp(vpnModeState.lastEnabledAtEpochMs),
+                            vpnDisabledAtLabel = formatTimestamp(vpnModeState.lastDisabledAtEpochMs),
+                            retentionSettings = retentionSettings,
+                            retentionStatus = retentionStatus,
+                            allowedRetentionDays = retentionPolicy.allowedRetentionDays(),
+                            loadedUsageEventCount = lastUsageEvents.size,
+                            loadedInventoryEventCount = lastInventoryEvents.size,
+                            loadedNetworkEventCount = lastNetworkEvents.size,
+                            vpnPacketsObserved = vpnTrafficTotals.totalPackets,
+                            vpnBytesObserved = vpnTrafficTotals.totalBytes,
+                            vpnUniqueDestinationCount = vpnTrafficTotals.uniqueDestinationCount,
+                            vpnParsedPacketsObserved = vpnTrafficTotals.parsedPackets,
+                            vpnUnparsedPacketsObserved = vpnTrafficTotals.unparsedPackets,
+                            vpnCaptureMode = vpnTrafficTotals.captureMode,
+                            vpnForwardingEnabled = vpnTrafficTotals.forwardingEnabled,
+                            vpnForwardingRequested = vpnModeState.isForwardingEnabled,
+                            vpnForwardingSupported = CyxWatchVpnService.isForwardingModeSupported(),
+                            isSecureScreenModeEnabled = secureScreenSettingsState.isEnabled,
+                        ),
+                        runtimeIntegrityNotice = runtimeIntegrityBlockMessage,
                         onEnableVpnModeClick = ::requestVpnModeEnable,
                         onDisableVpnModeClick = ::disableVpnMode,
-                        vpnEnabledAtLabel = formatTimestamp(vpnModeState.lastEnabledAtEpochMs),
-                        vpnDisabledAtLabel = formatTimestamp(vpnModeState.lastDisabledAtEpochMs),
-                        retentionSettings = retentionSettings,
-                        retentionStatus = retentionStatus,
-                        allowedRetentionDays = retentionPolicy.allowedRetentionDays(),
-                        loadedUsageEventCount = lastUsageEvents.size,
-                        loadedInventoryEventCount = lastInventoryEvents.size,
-                        loadedNetworkEventCount = lastNetworkEvents.size,
-                        vpnPacketsObserved = vpnTrafficTotals.totalPackets,
-                        vpnBytesObserved = vpnTrafficTotals.totalBytes,
-                        vpnUniqueDestinationCount = vpnTrafficTotals.uniqueDestinationCount,
-                        vpnParsedPacketsObserved = vpnTrafficTotals.parsedPackets,
-                        vpnUnparsedPacketsObserved = vpnTrafficTotals.unparsedPackets,
-                        vpnCaptureMode = vpnTrafficTotals.captureMode,
-                        vpnForwardingEnabled = vpnTrafficTotals.forwardingEnabled,
-                        onRefreshVpnDiagnosticsClick = { syncVpnStateTotals() },
-                        vpnForwardingRequested = vpnModeState.isForwardingEnabled,
-                        vpnForwardingSupported = CyxWatchVpnService.isForwardingModeSupported(),
                         onToggleVpnForwardingModeClick = ::setVpnForwardingEnabled,
+                        onRefreshVpnDiagnosticsClick = { syncVpnStateTotals() },
                         onRetentionDaysClick = ::applyRetentionDays,
                         onPruneNowClick = ::pruneLoadedEvidenceNow,
                         onDeleteLoadedEventsClick = ::deleteLoadedEvidence,
+                        onToggleSecureScreenModeClick = {
+                            setSecureScreenModeEnabled(!secureScreenSettingsState.isEnabled)
+                        },
                         onBack = { isTransparencySettingsOpen = false },
                     )
                 } else if (selectedScoreReason != null) {
@@ -882,6 +981,7 @@ private fun formatTimestamp(timestamp: Long?): String {
 private fun DashboardShell(
     modifier: Modifier = Modifier,
     collectionStatus: String,
+    runtimeIntegrityNotice: String? = null,
     onCollectEventsClick: () -> Unit,
     networkStatus: String,
     networkEvents: List<PrivacyEvent>,
@@ -919,17 +1019,7 @@ private fun DashboardShell(
     liveVpnThroughputSamples: List<Long>,
 ) {
     val dashboardScrollState = rememberScrollState()
-    val scoreBadge = scoreBadgeForPrivacyScore(privacyScore.score)
-    val topSignals = privacyScore.reasons.size
-    val topSignalsPreview = privacyScore.reasons.take(3)
-    val riskSummary = if (topSignals > 0) {
-        "${privacyScore.score}/100 score"
-    } else {
-        "No signal yet"
-    }
-    val hasEvidenceLoaded = usageEvents.isNotEmpty() || networkEvents.isNotEmpty() || hasInventory
     val sensitivePermissionAlerts = alerts.filter { it.rule.isSensitivePermissionWarning() }
-    val latestSensitivePermissionAlert = sensitivePermissionAlerts.maxByOrNull { it.triggeredAt }
     val visibleUsageTimeline = usageEvents.take(40)
     val visibleNetworkTimeline = networkEvents.take(40)
     val usageSummaryStatus = if (usageEvents.isEmpty()) {
@@ -955,14 +1045,6 @@ private fun DashboardShell(
     val peakThroughputBytes = liveVpnThroughputSamples.maxOrNull() ?: 0L
     val panelContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.56f)
     val panelStrokeColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-    val primaryAccent = MaterialTheme.colorScheme.primary
-    val heroBg = Brush.linearGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-        ),
-    )
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -974,186 +1056,34 @@ private fun DashboardShell(
             .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, panelStrokeColor),
-            colors = CardDefaults.cardColors(
-                containerColor = panelContainerColor,
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        ) {
-            Column(
-                modifier = Modifier
-                    .background(heroBg)
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+            runtimeIntegrityNotice?.takeIf { it.isNotBlank() }?.let { notice ->
+                Card(
                     modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                    ),
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                            Surface(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                .border(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-                                    shape = MaterialTheme.shapes.small,
-                                ),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                            ) {
-                                Image(
-                                    modifier = Modifier.padding(6.dp),
-                                    painter = painterResource(R.drawable.ic_cyxwatch_logo),
-                                    contentDescription = "CyxWatch logo",
-                                )
-                            }
-                        Column {
-                            Text("CyxWatch Monitor", style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                "Signal-first local observability.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = when (scoreBadge.label) {
-                            "HEALTHY" -> Color(0xFF153822)
-                            "WATCH" -> Color(0xFF352600)
-                            else -> Color(0xFF3F1616)
-                        },
-                    ) {
-                        Text(
-                            scoreBadge.label,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = scoreBadge.textColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-                Text(
-                    riskSummary,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = primaryAccent,
-                )
-                Text(
-                    if (topSignals > 0) {
-                        "Top active signals"
-                    } else {
-                        "No active signal sources"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                )
-    if (topSignalsPreview.isNotEmpty()) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            items(topSignalsPreview) { reason ->
-                MonitorSignalChip(reason = reason, onOpenScoreReasonClick = onOpenScoreReasonClick)
-            }
-        }
-    }
-                if (latestSensitivePermissionAlert != null) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f),
-                        shape = MaterialTheme.shapes.small,
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                "Sensitive permission watch",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            Text(
-                                "${latestSensitivePermissionAlert.message} (${formatTimestamp(latestSensitivePermissionAlert.triggeredAt.toEpochMilli())})",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    MonitorStatusBadge(
-                        label = "Mode",
-                        value = if (isVpnModeEnabled) "ADVANCED" else "BASIC",
-                        modifier = Modifier.weight(1f),
+                    Text(
+                        notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(10.dp),
                     )
-                    MonitorStatusBadge(
-                        label = "Evidence window",
-                        value = if (hasEvidenceLoaded) "ACTIVE" else "WAIT",
-                        modifier = Modifier.weight(1f),
-                    )
-                    MonitorStatusBadge(
-                        label = "Open alerts",
-                        value = alerts.size.toString(),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Text(
-                    if (isVpnModeEnabled) {
-                        "Advanced visibility is active; endpoint metadata only. No payload capture."
-                    } else {
-                        "Basic visibility mode active with local collection and daily aggregated totals."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    MonitorMetricTile(
-                        modifier = Modifier.weight(1f),
-                        label = "Privacy score",
-                        value = "${privacyScore.score}",
-                        hint = "out of 100",
-                        valueColor = scoreBadge.textColor,
-                    )
-                    MonitorMetricTile(
-                        modifier = Modifier.weight(1f),
-                        label = "Risk reasons",
-                        value = privacyScore.reasons.size.toString(),
-                        hint = "active signals",
-                        valueColor = MaterialTheme.colorScheme.onSurface,
-                    )
-                    MonitorMetricTile(
-                        modifier = Modifier.weight(1f),
-                        label = "Active alerts",
-                        value = alerts.size.toString(),
-                        hint = "open now",
-                        valueColor = MaterialTheme.colorScheme.error,
-                    )
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = onOpenDailySummaryClick,
-                        modifier = Modifier.weight(1f).semantics { contentDescription = "Open daily summary screen" },
-                    ) {
-                        Text("Daily summary")
-                    }
-                    FilledTonalButton(
-                        onClick = onOpenTransparencySettingsClick,
-                        modifier = Modifier.weight(1f).semantics { contentDescription = "Open privacy settings screen" },
-                    ) {
-                        Text("Privacy settings")
-                    }
                 }
             }
-        }
+
+            DashboardHeroCard(
+                privacyScore = privacyScore,
+                alerts = alerts,
+                isVpnModeEnabled = isVpnModeEnabled,
+                hasEvidenceLoaded = usageEvents.isNotEmpty() || networkEvents.isNotEmpty() || hasInventory,
+                latestSensitivePermissionAlert = sensitivePermissionAlerts.maxByOrNull { it.triggeredAt },
+                onOpenScoreReasonClick = onOpenScoreReasonClick,
+                onOpenDailySummaryClick = onOpenDailySummaryClick,
+                onOpenTransparencySettingsClick = onOpenTransparencySettingsClick,
+                modifier = Modifier.fillMaxWidth(),
+                panelContainerColor = panelContainerColor,
+                panelStrokeColor = panelStrokeColor,
+            )
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -1506,16 +1436,229 @@ private fun DashboardShell(
         }
         Spacer(modifier = Modifier.size(8.dp))
     }
-    ScrollNavigationControls(
-        scrollState = dashboardScrollState,
-        topContentDescription = "Scroll to top of dashboard",
-        bottomContentDescription = "Scroll to bottom of dashboard",
-        modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .padding(16.dp),
-    )
+        ScrollNavigationControls(
+            scrollState = dashboardScrollState,
+            topContentDescription = "Scroll to top of dashboard",
+            bottomContentDescription = "Scroll to bottom of dashboard",
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+        )
+    }
+
 }
 
+@Composable
+private fun DashboardHeroCard(
+    privacyScore: PrivacyScore,
+    alerts: List<PrivacyAlert>,
+    isVpnModeEnabled: Boolean,
+    hasEvidenceLoaded: Boolean,
+    latestSensitivePermissionAlert: PrivacyAlert?,
+    onOpenScoreReasonClick: (ScoreReason) -> Unit,
+    onOpenDailySummaryClick: () -> Unit,
+    onOpenTransparencySettingsClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    panelContainerColor: Color,
+    panelStrokeColor: Color,
+) {
+    val scoreBadge = scoreBadgeForPrivacyScore(privacyScore.score)
+    val topSignals = privacyScore.reasons.size
+    val topSignalsPreview = privacyScore.reasons.take(3)
+    val riskSummary = if (topSignals > 0) {
+        "${privacyScore.score}/100 score"
+    } else {
+        "No signal yet"
+    }
+    val hasSignal = topSignals > 0
+    val heroBg = Brush.linearGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+        ),
+    )
+
+    Card(
+        modifier = modifier,
+        border = BorderStroke(1.dp, panelStrokeColor),
+        colors = CardDefaults.cardColors(
+            containerColor = panelContainerColor,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .background(heroBg)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                shape = MaterialTheme.shapes.small,
+                            ),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    ) {
+                        Image(
+                            modifier = Modifier.padding(6.dp),
+                            painter = painterResource(R.drawable.ic_cyxwatch_logo),
+                            contentDescription = "CyxWatch logo",
+                        )
+                    }
+                    Column {
+                        Text("CyxWatch Monitor", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Signal-first local observability.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = when (scoreBadge.label) {
+                        "HEALTHY" -> Color(0xFF153822)
+                        "WATCH" -> Color(0xFF352600)
+                        else -> Color(0xFF3F1616)
+                    },
+                ) {
+                    Text(
+                        scoreBadge.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = scoreBadge.textColor,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            Text(
+                riskSummary,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                if (hasSignal) {
+                    "Top active signals"
+                } else {
+                    "No active signal sources"
+                },
+                style = MaterialTheme.typography.labelMedium,
+            )
+            if (topSignalsPreview.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    items(topSignalsPreview) { reason ->
+                        MonitorSignalChip(reason = reason, onOpenScoreReasonClick = onOpenScoreReasonClick)
+                    }
+                }
+            }
+            if (latestSensitivePermissionAlert != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f),
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            "Sensitive permission watch",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            "${latestSensitivePermissionAlert.message} (${formatTimestamp(latestSensitivePermissionAlert.triggeredAt.toEpochMilli())})",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                MonitorStatusBadge(
+                    label = "Mode",
+                    value = if (isVpnModeEnabled) "ADVANCED" else "BASIC",
+                    modifier = Modifier.weight(1f),
+                )
+                MonitorStatusBadge(
+                    label = "Evidence window",
+                    value = if (hasEvidenceLoaded) "ACTIVE" else "WAIT",
+                    modifier = Modifier.weight(1f),
+                )
+                MonitorStatusBadge(
+                    label = "Open alerts",
+                    value = alerts.size.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(
+                if (isVpnModeEnabled) {
+                    "Advanced visibility is active; endpoint metadata only. No payload capture."
+                } else {
+                    "Basic visibility mode active with local collection and daily aggregated totals."
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                MonitorMetricTile(
+                    modifier = Modifier.weight(1f),
+                    label = "Privacy score",
+                    value = "${privacyScore.score}",
+                    hint = "out of 100",
+                    valueColor = scoreBadge.textColor,
+                )
+                MonitorMetricTile(
+                    modifier = Modifier.weight(1f),
+                    label = "Risk reasons",
+                    value = privacyScore.reasons.size.toString(),
+                    hint = "active signals",
+                    valueColor = MaterialTheme.colorScheme.onSurface,
+                )
+                MonitorMetricTile(
+                    modifier = Modifier.weight(1f),
+                    label = "Active alerts",
+                    value = alerts.size.toString(),
+                    hint = "open now",
+                    valueColor = MaterialTheme.colorScheme.error,
+                )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onOpenDailySummaryClick,
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Open daily summary screen" },
+                ) {
+                    Text("Daily summary")
+                }
+                FilledTonalButton(
+                    onClick = onOpenTransparencySettingsClick,
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Open privacy settings screen" },
+                ) {
+                    Text("Privacy settings")
+                }
+            }
+        }
+    }
 }
 
 private enum class CollectionActionType {
@@ -1606,28 +1749,13 @@ private fun DashboardScoreReasonPanel(
 ) {
     val isSensitivePermissionReason = reason.rule.isSensitivePermissionWarning()
     val isCriticalSignal = reason.rule.isCriticalWarning()
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (isCriticalSignal) {
-                    Modifier.border(
-                        1.dp,
-                        MaterialTheme.colorScheme.error,
-                        MaterialTheme.shapes.small,
-                    )
-                } else {
-                    Modifier
-                },
-            ),
-        color = if (isCriticalSignal) {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f)
-        } else if (isSensitivePermissionReason) {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
-        },
-        shape = MaterialTheme.shapes.small,
+    ScorePanelSurface(
+        isCritical = isCriticalSignal,
+        isSensitive = isSensitivePermissionReason,
+        modifier = Modifier.fillMaxWidth(),
+        criticalSurfaceColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f),
+        sensitiveSurfaceColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f),
+        defaultSurfaceColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -1697,28 +1825,10 @@ private fun DashboardAlertPanel(
 ) {
     val isSensitivePermissionWarning = alert.rule.isSensitivePermissionWarning()
     val isCriticalAlert = alert.rule.isCriticalWarning()
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (isCriticalAlert) {
-                    Modifier.border(
-                        1.dp,
-                        MaterialTheme.colorScheme.error,
-                        MaterialTheme.shapes.small,
-                    )
-                } else {
-                    Modifier
-                },
-            ),
-        color = if (isCriticalAlert) {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
-        } else if (isSensitivePermissionWarning) {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
-        },
-        shape = MaterialTheme.shapes.small,
+    ScorePanelSurface(
+        isCritical = isCriticalAlert,
+        isSensitive = isSensitivePermissionWarning,
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -1878,7 +1988,7 @@ private fun MonitorSignalChip(
                 style = MaterialTheme.typography.labelMedium,
             )
             Text(
-                "${reason.rule.description} · -${reason.delta}",
+                "${reason.rule.description} -${reason.delta}",
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(

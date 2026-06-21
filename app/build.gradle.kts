@@ -59,8 +59,8 @@ android {
         applicationId = "com.cyxwatch.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.0.4"
+        versionCode = 100
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -73,7 +73,6 @@ android {
                 keyPassword = releaseKeyPassword
             }
         }
-
         if (!hasExplicitReleaseKeystore) {
             ensureDebugKeystoreForFallback()
             create("releaseDebugFallback") {

@@ -15,53 +15,9 @@ It is not a feature backlog. It is for orphan code, duplicated UI patterns, temp
 
 ## Active Cleanup Candidates
 
-### CLEAN-002: Review dashboard component boundaries
+No active cleanup candidates at this time.
 
-- Area: Main dashboard UI
-- Files:
-  - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
-- Issue: `DashboardShell` is carrying more visual structure as monitor UX expands.
-- Risk: The file can become hard to reason about as dashboard, alerts, live VPN telemetry, retention, and timelines grow together.
-- Cleanup action: Score reason and alert panels are now private composables in `CyxWatchApp.kt`. Continue extracting only stable sections after dashboard UX is accepted; do not split into separate files until ownership is clear.
-- Timing: After dashboard UX is accepted.
-- Status: `open`
-
-### CLEAN-003: Normalize signal and alert panel styling
-
-- Area: Dashboard and report UI
-- Files:
-  - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
-  - `app/src/main/kotlin/com/cyxwatch/app/ui/DailySummaryScreen.kt`
-- Issue: Dashboard and daily summary now both render permission/behavior signals, but styling is still duplicated.
-- Risk: Permission warnings may become visually inconsistent.
-- Cleanup action: Dashboard and daily summary now use private panel composables in their owning files. Compare both implementations after polish, then extract a shared panel only if the final states remain equivalent.
-- Timing: After alert/report refresh is complete.
-- Status: `open`
-
-### CLEAN-004: Verify launch gate persistence and first-run behavior
-
-- Area: Launch gate and settings persistence
-- Files:
-  - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
-  - `app/src/main/kotlin/com/cyxwatch/app/data/settings/LaunchGateSettingsRepository.kt`
-  - `app/src/main/kotlin/com/cyxwatch/app/data/settings/LaunchGateSettingsState.kt`
-  - `app/src/main/kotlin/com/cyxwatch/app/ui/LaunchGateScreen.kt`
-- Issue: Launch gate is implemented, but full Gradle verification is blocked locally by the wrapper/cache issue.
-- Risk: First-run persistence behavior needs build/test confirmation before release.
-- Cleanup action: Run unit/instrumentation checks once Gradle works. Remove or adjust any unused launch-gate state fields after validation.
-- Timing: Before next release tag.
-- Status: `closed`
-
-### CLEAN-007: Review settings component boundaries
-
-- Area: Privacy settings UI
-- Files:
-  - `app/src/main/kotlin/com/cyxwatch/app/ui/TransparencySettingsScreen.kt`
-- Issue: Settings now has several private card composables for network visibility, diagnostics, and retention.
-- Risk: Parameter lists can grow if settings absorbs more runtime state without a clearer state model.
-- Cleanup action: After settings UX is accepted, review whether a narrow `TransparencySettingsUiState` would simplify the screen without hiding behavior.
-- Timing: After `CYX-912` is visually stable.
-- Status: `open`
+## Closed Cleanup Items
 
 ### CLEAN-008: Centralize permission classification
 
@@ -75,20 +31,6 @@ It is not a feature backlog. It is for orphan code, duplicated UI patterns, temp
 - Timing: After current monitor-style implementation lands and screenshots are approved.
 - Resolution: Added `SensitivePermissionPolicy` and replaced both scorer/profile lookups with `SensitivePermissionPolicy.isSensitive(...)`.
 - Status: `closed`
-
-### CLEAN-005: Keep generated/reference assets out of app source
-
-- Area: Workspace hygiene
-- Files:
-  - `.gitignore`
-  - `Res/`
-  - `docs/launch-gate-plan.md`
-- Issue: `Res/` contains reference images for UX direction, not Android runtime resources.
-- Risk: Large reference assets could accidentally enter app source or release artifacts.
-- Cleanup action: Confirm `.gitignore` excludes `Res/`; document which reference images influenced implemented screens.
-- Timing: Before commit.
-- Status: `closed`
-- Resolution: `.gitignore` now excludes `/res/`, `/Res/`, and `/.gradle-work/`, and these references remain in workspace-only docs/assets folders.
 
 ### CLEAN-006: Gradle wrapper/cache verification blocker
 
@@ -108,7 +50,47 @@ It is not a feature backlog. It is for orphan code, duplicated UI patterns, temp
 - Resolution: `scripts/build-cyxwatch.ps1 -Mode ci -StopJava -CleanBuildState` now recovers from repeated lock contention.
 - Status: `closed`
 
-## Closed Cleanup Items
+### CLEAN-005: Keep generated/reference assets out of app source
+
+- Area: Workspace hygiene
+- Files:
+  - `.gitignore`
+  - `Res/`
+  - `docs/launch-gate-plan.md`
+- Issue: `Res/` contains reference images for UX direction, not Android runtime resources.
+- Risk: Large reference assets could accidentally enter app source or release artifacts.
+- Cleanup action: Confirm `.gitignore` excludes `Res/`; document which reference images influenced implemented screens.
+- Timing: Before commit.
+- Resolution: `.gitignore` now excludes `/res/`, `/Res/`, and `/.gradle-work/`, and these references remain in workspace-only docs/assets folders.
+- Status: `closed`
+
+### CLEAN-004: Verify launch gate persistence and first-run behavior
+
+- Area: Launch gate and settings persistence
+- Files:
+  - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
+  - `app/src/main/kotlin/com/cyxwatch/app/data/settings/LaunchGateSettingsRepository.kt`
+  - `app/src/main/kotlin/com/cyxwatch/app/data/settings/LaunchGateSettingsState.kt`
+  - `app/src/main/kotlin/com/cyxwatch/app/ui/LaunchGateScreen.kt`
+- Issue: Launch gate is implemented, but full Gradle verification is blocked locally by the wrapper/cache issue.
+- Risk: First-run persistence behavior needs build/test confirmation before release.
+- Cleanup action: Run unit/instrumentation checks once Gradle works. Remove or adjust any unused launch-gate state fields after validation.
+- Timing: Before next release tag.
+- Resolution: Verified the launch gate persisted state paths and removed unused gating branches after validation.
+- Status: `closed`
+
+### CLEAN-003: Normalize signal and alert panel styling
+
+- Area: Dashboard and report UI
+- Files:
+  - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
+  - `app/src/main/kotlin/com/cyxwatch/app/ui/DailySummaryScreen.kt`
+- Issue: Dashboard and daily summary now both render permission/behavior signals, but styling is still duplicated.
+- Risk: Permission warnings may become visually inconsistent.
+- Cleanup action: Dashboard and daily summary now use private panel composables in their owning files. Compare both implementations after polish, then extract a shared panel only if the final states remain equivalent.
+- Timing: After alert/report refresh is complete.
+- Resolution: Added `ScorePanelSurface` and `SignalLevelBadge` in `ReportingUiHelpers` and applied them to both dashboard-like panels, preserving signal-level semantics while unifying alert styling.
+- Status: `closed`
 
 ### CLEAN-001: Consolidate scroll navigation controls
 
@@ -121,4 +103,32 @@ It is not a feature backlog. It is for orphan code, duplicated UI patterns, temp
   - `app/src/main/kotlin/com/cyxwatch/app/ui/InventoryEvidenceScreen.kt`
   - `app/src/main/kotlin/com/cyxwatch/app/ui/TransparencySettingsScreen.kt`
 - Resolution: Added shared `LazyListScrollNavigationControls` and `ScrollNavigationControls`; callers now pass only state and content descriptions.
+- Status: `closed`
+
+### CLEAN-002: Review dashboard component boundaries
+
+- Area: Main dashboard UI
+- Files:
+  - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
+- Issue: `DashboardShell` is carrying more visual structure as monitor UX expands.
+- Risk: The file can become hard to reason about as dashboard, alerts, live VPN telemetry, retention, and timelines grow together.
+- Cleanup action: Extract the monitor hero section out of `DashboardShell` into a narrow, dedicated composable so the dashboard root stays easier to read.
+- Timing: After dashboard UX is accepted.
+- Resolution:
+  - Extracted the monitor hero card into `DashboardHeroCard` in `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`.
+  - DashboardShell now passes state through a narrower boundary and renders the hero section via the extracted composable.
+  - Kept behavior and callbacks unchanged while reducing the function's visual coupling.
+- Status: `closed`
+
+### CLEAN-007: Review settings component boundaries
+
+- Area: Privacy settings UI
+- Files:
+  - `app/src/main/kotlin/com/cyxwatch/app/CyxWatchApp.kt`
+  - `app/src/main/kotlin/com/cyxwatch/app/ui/TransparencySettingsScreen.kt`
+- Issue: Settings now has several private card composables for network visibility, diagnostics, and retention.
+- Risk: Parameter lists can grow if settings absorbs more runtime state without a clearer state model.
+- Cleanup action: After settings UX is accepted, review whether a narrow `TransparencySettingsUiState` would simplify the screen without hiding behavior.
+- Timing: After `CYX-912` is visually stable.
+- Resolution: Added `TransparencySettingsUiState` and switched `CyxWatchApp` to pass one screen state object into `TransparencySettingsScreen`, reducing call complexity while preserving existing behaviors and callbacks.
 - Status: `closed`

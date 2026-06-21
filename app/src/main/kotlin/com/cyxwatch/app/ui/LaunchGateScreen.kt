@@ -39,6 +39,7 @@ fun LaunchGateScreen(
     onStartMonitoringClick: () -> Unit,
     onOpenPrivacyControlsClick: () -> Unit,
     onBackToDashboardClick: () -> Unit,
+    runtimeIntegrityNotice: String? = null,
 ) {
     val scrollState = rememberScrollState()
 
@@ -96,6 +97,31 @@ fun LaunchGateScreen(
                     )
                 }
             }
+
+            runtimeIntegrityNotice?.takeIf { it.isNotBlank() }?.let { notice ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                    ),
+                ) {
+                    Text(
+                        notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
+            }
+
+            MonitorInfoCard(
+                title = "Privacy guardrails",
+                rows = listOf(
+                    "No packet payload collection.",
+                    "No cloud upload or telemetry sync.",
+                    "All event processing stays local to this device.",
+                    "VPN visibility is monitoring only, not a private tunnel.",
+                ),
+            )
 
             MonitorInfoCard(
                 title = "Why this app needs setup",

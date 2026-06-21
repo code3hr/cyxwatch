@@ -2,7 +2,6 @@ package com.cyxwatch.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,7 +17,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -262,26 +260,13 @@ private fun DailySummaryRiskReasonPanel(
 ) {
     val isSensitivePermissionReason = reason.rule.isSensitivePermissionWarning()
     val isCriticalSignal = reason.rule.isCriticalWarning()
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (isCriticalSignal) {
-                    Modifier.border(
-                        1.dp,
-                        MaterialTheme.colorScheme.error,
-                        MaterialTheme.shapes.small,
-                    )
-                } else {
-                    Modifier
-                },
-            ),
-        color = if (isCriticalSignal) {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
-        },
-        shape = MaterialTheme.shapes.small,
+    ScorePanelSurface(
+        isCritical = isCriticalSignal,
+        isSensitive = isSensitivePermissionReason,
+        modifier = Modifier.fillMaxWidth(),
+        criticalSurfaceColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.16f),
+        sensitiveSurfaceColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f),
+        defaultSurfaceColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -292,7 +277,7 @@ private fun DailySummaryRiskReasonPanel(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SummarySignalBadge(
+                SignalLevelBadge(
                     level = signalLevel,
                     label = signalLevelLabel(signalLevel),
                 )
@@ -366,28 +351,10 @@ private fun DailySummaryAlertPanel(
 ) {
     val isSensitivePermissionWarning = alert.rule.isSensitivePermissionWarning()
     val isCriticalAlert = alert.rule.isCriticalWarning()
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (isCriticalAlert) {
-                    Modifier.border(
-                        1.dp,
-                        MaterialTheme.colorScheme.error,
-                        MaterialTheme.shapes.small,
-                    )
-                } else {
-                    Modifier
-                },
-            ),
-        color = if (isCriticalAlert) {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
-        } else if (isSensitivePermissionWarning) {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
-        },
-        shape = MaterialTheme.shapes.small,
+    ScorePanelSurface(
+        isCritical = isCriticalAlert,
+        isSensitive = isSensitivePermissionWarning,
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -398,7 +365,7 @@ private fun DailySummaryAlertPanel(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SummarySignalBadge(
+                SignalLevelBadge(
                     level = signalLevel,
                     label = signalLevelLabel(signalLevel),
                 )
@@ -489,24 +456,3 @@ private fun MonitorMetric(
     }
 }
 
-@Composable
-private fun SummarySignalBadge(level: SignalLevel, label: String) {
-    val background = when (level) {
-        SignalLevel.HIGH -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
-        SignalLevel.MEDIUM -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
-        SignalLevel.LOW -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
-    }
-    val textColor = when (level) {
-        SignalLevel.HIGH -> MaterialTheme.colorScheme.onErrorContainer
-        SignalLevel.MEDIUM -> MaterialTheme.colorScheme.onTertiaryContainer
-        SignalLevel.LOW -> MaterialTheme.colorScheme.onSecondaryContainer
-    }
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(background)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    ) {
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = textColor)
-    }
-}
