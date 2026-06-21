@@ -28,6 +28,29 @@ val hasExplicitReleaseKeystore = releaseKeystoreFile?.exists() == true &&
     !releaseKeystoreAlias.isNullOrBlank() &&
     !releaseKeyPassword.isNullOrBlank()
 
+fun ensureDebugKeystoreForFallback() {
+    val fallbackDebugKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
+    if (!fallbackDebugKeystore.exists()) {
+        fallbackDebugKeystore.parentFile.mkdirs()
+        project.exec {
+            commandLine(
+                "keytool",
+                "-genkeypair",
+                "-v",
+                "-keystore", fallbackDebugKeystore.absolutePath,
+                "-storetype", "PKCS12",
+                "-alias", "androiddebugkey",
+                "-keypass", "android",
+                "-storepass", "android",
+                "-dname", "CN=CyxWatch, OU=Development, O=CyxWatch, L=, S=, C=US",
+                "-keyalg", "RSA",
+                "-keysize", "2048",
+                "-validity", "10000"
+            )
+        }
+    }
+}
+
 android {
     namespace = "com.cyxwatch.app"
     compileSdk = 34
@@ -52,6 +75,7 @@ android {
         }
 
         if (!hasExplicitReleaseKeystore) {
+            ensureDebugKeystoreForFallback()
             create("releaseDebugFallback") {
                 initWith(signingConfigs.getByName("debug"))
                 val fallbackDebugKeystore = File(
