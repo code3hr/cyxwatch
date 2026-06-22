@@ -73,7 +73,7 @@ fun UsageAccessScreen(
                 ) {
                     Image(
                         modifier = Modifier.size(56.dp),
-                        painter = painterResource(R.drawable.ic_cyxwatch_logo),
+                        painter = painterResource(R.drawable.cyxwatch_logo_new),
                         contentDescription = "CyxWatch logo",
                     )
                     Text("Usage Access", style = MaterialTheme.typography.headlineSmall)

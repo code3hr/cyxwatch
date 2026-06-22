@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -143,6 +146,14 @@ private data class ThreatRenderData(
     val subtitle: String,
     val severity: ThreatSeverity,
     val icon: String,
+)
+
+data class SuspiciousAppSummary(
+    val packageName: String,
+    val appName: String,
+    val reportCount: Int,
+    val latestTimestampLabel: String,
+    val topReason: String,
 )
 
 private fun alertSeverity(alert: PrivacyAlert): ThreatSeverity = when {
@@ -1632,6 +1643,7 @@ fun SettingsScreen(
     onThemeClicked: () -> Unit,
     onLanguageClicked: () -> Unit,
     onDataUsageClicked: () -> Unit,
+    onSuspiciousAppsClicked: () -> Unit,
     onAboutClicked: () -> Unit,
     onPrivacyPolicyClicked: () -> Unit,
     onTermsClicked: () -> Unit,
@@ -1654,24 +1666,21 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                 color = UiTokens.TextPrimary,
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(UiTokens.AccentBlue, RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center,
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("CW", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-                Column {
-                    Text("Cyx", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = UiTokens.TextPrimary)
-                    Text("Watch", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = UiTokens.AccentBlueLight)
+                    Image(
+                        painter = painterResource(com.cyxwatch.app.R.drawable.cyxwatch_logo_new),
+                        contentDescription = "CyxWatch logo",
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Column {
+                        Text("Cyx", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = UiTokens.TextPrimary)
+                        Text("Watch", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = UiTokens.AccentBlueLight)
+                    }
                 }
             }
-        }
 
         SettingsSection("PROTECTION")
         SettingsCard {
@@ -1768,6 +1777,14 @@ fun SettingsScreen(
                 subtitle = "Read our terms and conditions",
                 onClick = onTermsClicked,
             )
+            SettingsActionRow(
+                icon = "\uD83E\uDDF0",
+                iconBg = Color(0xFF2D2208),
+                iconTint = Color(0xFF93C5FD),
+                title = "Suspicious App Reports",
+                subtitle = "See apps frequently reported by the community",
+                onClick = onSuspiciousAppsClicked,
+            )
         }
 
         Card(
@@ -1842,6 +1859,358 @@ private fun SettingsCard(content: @Composable () -> Unit) {
         border = androidx.compose.foundation.BorderStroke(1.dp, UiTokens.Border),
     ) {
         Column { content() }
+    }
+}
+
+@Composable
+private fun SettingsDetailContainer(
+    title: String,
+    subtitle: String? = null,
+    onBack: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "\u2039",
+                color = UiTokens.TextSecondary,
+                style = MaterialTheme.typography.headlineLarge,
+                modifier = Modifier.clickable { onBack() },
+            )
+            Column {
+                Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = UiTokens.TextPrimary)
+                subtitle?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                }
+            }
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = UiTokens.BgSecondary),
+            border = androidx.compose.foundation.BorderStroke(1.dp, UiTokens.Border),
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+fun ScanScheduleSettingsScreen(
+    selectedSchedule: String,
+    onBack: () -> Unit,
+    onSelectionChanged: (String) -> Unit,
+) {
+    val options = listOf("Every 6h", "Every 12h", "Every 24h", "Manual")
+    SettingsDetailContainer(
+        title = "Scan Schedule",
+        subtitle = "Choose how often background checks run.",
+        onBack = onBack,
+    ) {
+        settingsChoiceRows(
+            title = "Scan frequency",
+            options = options,
+            selectedOption = selectedSchedule,
+            onOptionSelected = onSelectionChanged,
+        )
+    }
+}
+
+@Composable
+fun ThemeSettingsScreen(
+    selectedTheme: String,
+    onBack: () -> Unit,
+    onSelectionChanged: (String) -> Unit,
+) {
+    val options = listOf("Dark", "Light", "System")
+    SettingsDetailContainer(
+        title = "Theme",
+        subtitle = "Select the preferred visual theme.",
+        onBack = onBack,
+    ) {
+        settingsChoiceRows(
+            title = "Theme",
+            options = options,
+            selectedOption = selectedTheme,
+            onOptionSelected = onSelectionChanged,
+        )
+    }
+}
+
+@Composable
+fun LanguageSettingsScreen(
+    selectedLanguage: String,
+    onBack: () -> Unit,
+    onSelectionChanged: (String) -> Unit,
+) {
+    val options = listOf("English", "Spanish", "French", "German", "Japanese")
+    SettingsDetailContainer(
+        title = "Language",
+        subtitle = "Pick interface language.",
+        onBack = onBack,
+    ) {
+        settingsChoiceRows(
+            title = "Language",
+            options = options,
+            selectedOption = selectedLanguage,
+            onOptionSelected = onSelectionChanged,
+        )
+    }
+}
+
+@Composable
+fun IgnoreListSettingsScreen(
+    ignoredPackages: List<String>,
+    availableProfiles: List<AppProfile>,
+    onBack: () -> Unit,
+    onAddPackage: (String) -> Unit,
+    onRemovePackage: (String) -> Unit,
+) {
+    var packageInput by remember { mutableStateOf("") }
+    SettingsDetailContainer(
+        title = "Ignore List",
+        subtitle = "Apps you add here are excluded from alert cards.",
+        onBack = onBack,
+    ) {
+        Text(
+            "Manage ignored packages",
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = UiTokens.TextMuted,
+        )
+
+        OutlinedTextField(
+            value = packageInput,
+            onValueChange = { packageInput = it },
+            label = { Text("Package name") },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("com.example.app") },
+            singleLine = true,
+        )
+        Button(
+            onClick = {
+                onAddPackage(packageInput.trim())
+                packageInput = ""
+            },
+            enabled = packageInput.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Add to Ignore List")
+        }
+
+        Text(
+            "Ignored apps",
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = UiTokens.TextMuted,
+        )
+        if (ignoredPackages.isEmpty()) {
+            EmptyState("No ignored apps. Add an app package name to hide it from lists.")
+        } else {
+            ignoredPackages.forEach { packageName ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            packageName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = UiTokens.TextPrimary,
+                        )
+                        Text(
+                            "Ignored",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = UiTokens.TextSecondary,
+                        )
+                    }
+                    OutlinedButton(onClick = { onRemovePackage(packageName) }) {
+                        Text("Remove")
+                    }
+                }
+                HorizontalDivider(color = UiTokens.Border)
+            }
+        }
+
+        if (availableProfiles.isNotEmpty()) {
+            Text(
+                "Quick add from installed apps",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = UiTokens.TextMuted,
+            )
+            val quickAddCandidates = availableProfiles
+                .filter { profile -> !ignoredPackages.contains(profile.packageName) }
+                .take(5)
+            quickAddCandidates.forEach { profile ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppInitialIcon(profile.label.ifBlank { profile.packageName })
+                    Column(modifier = Modifier.weight(1f).padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(profile.label.ifBlank { profile.packageName }, style = MaterialTheme.typography.bodyMedium, color = UiTokens.TextPrimary)
+                        Text(profile.packageName, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                    }
+                    TextButton(onClick = { onAddPackage(profile.packageName) }) {
+                        Text("Add")
+                    }
+                }
+                HorizontalDivider(color = UiTokens.Border)
+            }
+        }
+    }
+}
+
+@Composable
+fun DataUsageSettingsScreen(
+    hasUsageAccess: Boolean,
+    retentionDays: Int,
+    usageEventCount: Int,
+    inventoryEventCount: Int,
+    networkEventCount: Int,
+    activeAlertCount: Int,
+    ignoredPackageCount: Int,
+    onBack: () -> Unit,
+) {
+    SettingsDetailContainer(
+        title = "Data Usage",
+        subtitle = "How monitoring data is kept and why.",
+        onBack = onBack,
+    ) {
+        val statusText = if (hasUsageAccess) "Usage access granted" else "Usage access required"
+        Text("Data model", style = MaterialTheme.typography.labelSmall, color = UiTokens.TextMuted)
+        settingsStatRows(
+            listOf(
+                "Retention window" to "$retentionDays days",
+                "Usage events" to usageEventCount.toString(),
+                "Inventory events" to inventoryEventCount.toString(),
+                "Network events" to networkEventCount.toString(),
+                "Active alerts" to activeAlertCount.toString(),
+                "Ignored apps" to ignoredPackageCount.toString(),
+                "Source" to statusText,
+            ),
+        )
+
+        Text(
+            "All evidence and settings data remains on-device by design. " +
+                "CyxWatch does not upload event streams or telemetry to a remote service.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            "Advanced VPN visibility is endpoint metadata only; it never stores packet payloads.",
+            style = MaterialTheme.typography.bodySmall,
+            color = UiTokens.TextSecondary,
+        )
+    }
+}
+
+@Composable
+fun InfoSettingsScreen(
+    title: String,
+    body: String,
+    onBack: () -> Unit,
+) {
+    SettingsDetailContainer(
+        title = title,
+        onBack = onBack,
+    ) {
+        Text(body, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+    }
+}
+
+@Composable
+fun SuspiciousAppReportScreen(
+    reports: List<SuspiciousAppSummary>,
+    onBack: () -> Unit,
+) {
+    SettingsDetailContainer(
+        title = "Suspicious App Reports",
+        subtitle = "Apps frequently flagged by local analysis.",
+        onBack = onBack,
+    ) {
+        if (reports.isEmpty()) {
+            EmptyState("No frequent suspicious activity yet. Run monitoring and collect events to build this list.")
+        } else {
+            reports.forEach { report ->
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(report.appName, style = MaterialTheme.typography.titleSmall, color = UiTokens.TextPrimary)
+                            Text(report.packageName, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                            Text(report.topReason, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                        }
+                        Text("${report.reportCount}", color = UiTokens.AccentBlueLight)
+                    }
+                    Text(
+                        "Last seen: ${report.latestTimestampLabel}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = UiTokens.TextMuted,
+                    )
+                    HorizontalDivider(color = UiTokens.Border)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun settingsChoiceRows(
+    title: String,
+    options: List<String>,
+    selectedOption: String,
+    onOptionSelected: (String) -> Unit,
+) {
+    Text(title, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = UiTokens.TextMuted)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        options.forEach { option ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOptionSelected(option) }
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(option, style = MaterialTheme.typography.bodyMedium, color = UiTokens.TextPrimary)
+                if (option == selectedOption) {
+                    Text("\u2713", color = UiTokens.StatusSafe)
+                }
+            }
+            HorizontalDivider(color = UiTokens.Border)
+        }
+    }
+}
+
+@Composable
+private fun settingsStatRows(stats: List<Pair<String, String>>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        stats.forEach { pair ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(pair.first, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                Text(pair.second, style = MaterialTheme.typography.bodyMedium, color = UiTokens.TextPrimary)
+            }
+            HorizontalDivider(color = UiTokens.Border)
+        }
     }
 }
 

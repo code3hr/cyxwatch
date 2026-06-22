@@ -35,7 +35,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CardDefaults
@@ -132,6 +134,18 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private enum class SettingsSubScreen {
+    IgnoreList,
+    ScanSchedule,
+    Theme,
+    Language,
+    DataUsage,
+    About,
+    PrivacyPolicy,
+    TermsOfService,
+    SuspiciousApps,
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CyxWatchApp(
@@ -212,6 +226,19 @@ fun CyxWatchApp(
     var selectedScoreReason by remember { mutableStateOf<ScoreReason?>(null) }
     var selectedDailySummary by remember { mutableStateOf<DailySummary?>(null) }
     var isTransparencySettingsOpen by remember { mutableStateOf(false) }
+    var selectedMainTab by remember { mutableStateOf(MainTab.Dashboard) }
+    var alertsTabFilter by remember { mutableStateOf(AlertSeverityFilter.All) }
+    var monitorTabFilter by remember { mutableStateOf(MonitorStatusFilter.All) }
+    var reportsPeriod by remember { mutableStateOf(ReportsPeriod.Daily) }
+    var isRealtimeProtectionEnabled by remember { mutableStateOf(true) }
+    var isNotificationsEnabled by remember { mutableStateOf(true) }
+    var pendingThemeSelection by remember { mutableStateOf("Dark") }
+    var pendingLanguageSelection by remember { mutableStateOf("English") }
+    var scanScheduleSelection by remember { mutableStateOf("Every 24h") }
+    var settingsSubScreen by remember { mutableStateOf<SettingsSubScreen?>(null) }
+    var ignoredPackages by remember { mutableStateOf(setOf<String>()) }
+    var pendingRealtimeDisable by remember { mutableStateOf(false) }
+    var pendingLogout by remember { mutableStateOf(false) }
     var isCollectingUsage by remember { mutableStateOf(false) }
     var isCollectingNetwork by remember { mutableStateOf(false) }
     var isCollectingInventory by remember { mutableStateOf(false) }
@@ -325,7 +352,16 @@ fun CyxWatchApp(
         }
     }
 
+    fun clearAlertHistory() {
+        activeAlerts = emptyList()
+        suppressedAlertCount = 0
+    }
+
     fun refreshAlerts() {
+        if (!isRealtimeProtectionEnabled) {
+            clearAlertHistory()
+            return
+        }
         val now = Instant.now()
         val currentScoringEvents = lastUsageEvents + lastNetworkEvents + lastInventoryEvents
         val currentScore = privacyScoreCalculator.calculate(currentScoringEvents)
@@ -336,7 +372,7 @@ fun CyxWatchApp(
         )
         val newAlerts = evaluation.alerts
         newAlerts
-            .filter { it.rule.isSensitivePermissionWarning() }
+            .filter { isNotificationsEnabled && it.rule.isSensitivePermissionWarning() }
             .forEach { alert ->
                 permissionWarningNotifier.postPermissionWarning(
                     alert = alert,
@@ -349,9 +385,12 @@ fun CyxWatchApp(
         suppressedAlertCount = evaluation.suppressedCount
     }
 
-    fun clearAlertHistory() {
-        activeAlerts = emptyList()
-        suppressedAlertCount = 0
+    fun clearDetailState() {
+        settingsSubScreen = null
+        selectedProfile = null
+        selectedPermissionForEvidence = null
+        selectedScoreReason = null
+        selectedDailySummary = null
     }
 
     fun dismissThreatByReason(reason: ScoreReason) {
@@ -404,6 +443,23 @@ fun CyxWatchApp(
         selectedScoreReason = null
         retentionStatus = "Deleted $deletedCount loaded evidence event(s)."
         clearAlertHistory()
+    }
+
+    fun performLogout() {
+        clearDetailState()
+        clearAlertHistory()
+        lastUsageEvents = emptyList()
+        lastNetworkEvents = emptyList()
+        lastInventoryEvents = emptyList()
+        lastInventoryProfiles = emptyList()
+        ignoredPackages = emptySet()
+        collectStatus = "No data collected yet."
+        networkStatus = "No network data collected yet."
+        inventoryStatus = "No app inventory loaded."
+        inventoryChangeStatus = "No inventory deltas yet."
+        retentionStatus = "Retention window: ${retentionSettings.retentionDays} days."
+        selectedMainTab = MainTab.Dashboard
+        isTransparencySettingsOpen = false
     }
 
     fun refreshVpnLiveTelemetry() {
@@ -522,15 +578,6 @@ fun CyxWatchApp(
         selectedProfile != null ||
         selectedDailySummary != null
     )
-    var selectedMainTab by remember { mutableStateOf(MainTab.Dashboard) }
-    var alertsTabFilter by remember { mutableStateOf(AlertSeverityFilter.All) }
-    var monitorTabFilter by remember { mutableStateOf(MonitorStatusFilter.All) }
-    var reportsPeriod by remember { mutableStateOf(ReportsPeriod.Daily) }
-    var isRealtimeProtectionEnabled by remember { mutableStateOf(true) }
-    var isNotificationsEnabled by remember { mutableStateOf(true) }
-    var pendingThemeSelection by remember { mutableStateOf("Dark") }
-    var pendingLanguageSelection by remember { mutableStateOf("English") }
-    var scanScheduleSelection by remember { mutableStateOf("Every 24h") }
     val activity = LocalContext.current as? Activity
 
     LaunchedEffect(activity, isProtectedEvidenceScreen) {
@@ -567,6 +614,32 @@ fun CyxWatchApp(
         onError = Color(0xFFFFFFFF),
         outline = Color(0xFF7F8FB2),
     )
+
+    val visibleActiveAlerts = activeAlerts.filterNot { ignoredPackages.contains(it.packageName) }
+    val suspiciousAppSummaries = activeAlerts
+        .groupBy { it.packageName }
+        .mapNotNull { (packageName, alerts) ->
+            if (alerts.size < 2) {
+                return@mapNotNull null
+            }
+            val reasonCounts = alerts.groupingBy { it.rule }.eachCount()
+            val topReason = reasonCounts.maxByOrNull { it.value }?.key ?: return@mapNotNull null
+            val latestAlert = alerts.maxByOrNull { it.triggeredAt }
+            if (latestAlert == null) {
+                return@mapNotNull null
+            }
+            SuspiciousAppSummary(
+                packageName = packageName,
+                appName = appLabelsByPackageName[packageName] ?: packageName,
+                reportCount = alerts.size,
+                latestTimestampLabel = DateTimeFormatter.ofPattern("MMM d, HH:mm")
+                    .withZone(ZoneId.systemDefault())
+                    .format(latestAlert.triggeredAt),
+                topReason = topReason.name.lowercase().replace('_', ' '),
+            )
+        }
+        .sortedWith(compareByDescending<SuspiciousAppSummary> { it.reportCount }.thenByDescending { it.latestTimestampLabel })
+        .take(10)
 
     val showPrimaryTabs = hasUsageAccess &&
         selectedProfile == null &&
@@ -638,7 +711,7 @@ fun CyxWatchApp(
                     when (selectedMainTab) {
                         MainTab.Dashboard -> RedesignedDashboardScreen(
                             modifier = Modifier.padding(contentPadding),
-                            activeAlerts = activeAlerts,
+                            activeAlerts = visibleActiveAlerts,
                             suppressedAlertCount = suppressedAlertCount,
                             lastUsageEvents = lastUsageEvents,
                             lastNetworkEvents = lastNetworkEvents,
@@ -840,7 +913,7 @@ fun CyxWatchApp(
                                 selectedDailySummary = buildDailySummaryUseCase.build(
                                     score = privacyScore,
                                     events = scoringEvents,
-                                    alerts = activeAlerts,
+                                    alerts = visibleActiveAlerts,
                                     now = Instant.now(),
                                 )
                             },
@@ -855,7 +928,7 @@ fun CyxWatchApp(
                         MainTab.Alerts -> {
                             AlertsScreen(
                                 modifier = Modifier.padding(contentPadding),
-                                alerts = activeAlerts,
+                                alerts = visibleActiveAlerts,
                                 activeFilter = alertsTabFilter,
                                 onFilterSelected = { alertsTabFilter = it },
                                 onAlertClick = { alert ->
@@ -886,7 +959,7 @@ fun CyxWatchApp(
                                 modifier = Modifier.padding(contentPadding),
                                 reportsPeriod = reportsPeriod,
                                 onPeriodChanged = { reportsPeriod = it },
-                                alerts = activeAlerts,
+                                alerts = visibleActiveAlerts,
                                 onThreatClick = {
                                     selectedScoreReason = ScoreReason(
                                         rule = it.rule,
@@ -901,43 +974,122 @@ fun CyxWatchApp(
                             )
                         }
                         MainTab.Settings -> {
-                            SettingsScreen(
-                                modifier = Modifier.padding(contentPadding),
-                                realTimeProtectionEnabled = isRealtimeProtectionEnabled,
-                                notificationsEnabled = isNotificationsEnabled,
-                                theme = pendingThemeSelection,
-                                language = pendingLanguageSelection,
-                                scanSchedule = scanScheduleSelection,
-                                onRealtimeProtectionToggled = { isRealtimeProtectionEnabled = it },
-                                onNotificationsToggled = { isNotificationsEnabled = it },
-                                onIgnoreList = {},
-                                onScanScheduleClicked = {
-                                    scanScheduleSelection = when (scanScheduleSelection) {
-                                        "Every 6h" -> "Every 12h"
-                                        "Every 12h" -> "Every 24h"
-                                        else -> "Every 6h"
-                                    }
-                                },
-                                onThemeClicked = {
-                                    pendingThemeSelection = when (pendingThemeSelection) {
-                                        "Dark" -> "Light"
-                                        "Light" -> "Dark"
-                                        else -> "System"
-                                    }
-                                },
-                                onLanguageClicked = {
-                                    pendingLanguageSelection = when (pendingLanguageSelection) {
-                                        "English" -> "Spanish"
-                                        "Spanish" -> "English"
-                                        else -> "English"
-                                    }
-                                },
-                                onDataUsageClicked = {},
-                                onAboutClicked = {},
-                                onPrivacyPolicyClicked = {},
-                                onTermsClicked = {},
-                                onLogout = {},
-                            )
+                            val onBackToSettings = { settingsSubScreen = null }
+                            when (settingsSubScreen) {
+                                null -> SettingsScreen(
+                                    modifier = Modifier.padding(contentPadding),
+                                    realTimeProtectionEnabled = isRealtimeProtectionEnabled,
+                                    notificationsEnabled = isNotificationsEnabled,
+                                    theme = pendingThemeSelection,
+                                    language = pendingLanguageSelection,
+                                    scanSchedule = scanScheduleSelection,
+                                    onRealtimeProtectionToggled = { isEnabled ->
+                                        if (!isEnabled) {
+                                            pendingRealtimeDisable = true
+                                        } else {
+                                            isRealtimeProtectionEnabled = isEnabled
+                                            refreshAlerts()
+                                        }
+                                    },
+                                    onNotificationsToggled = {
+                                        isNotificationsEnabled = it
+                                    },
+                                    onIgnoreList = {
+                                        settingsSubScreen = SettingsSubScreen.IgnoreList
+                                    },
+                                    onScanScheduleClicked = {
+                                        settingsSubScreen = SettingsSubScreen.ScanSchedule
+                                    },
+                                    onThemeClicked = {
+                                        settingsSubScreen = SettingsSubScreen.Theme
+                                    },
+                                    onLanguageClicked = {
+                                        settingsSubScreen = SettingsSubScreen.Language
+                                    },
+                                    onDataUsageClicked = {
+                                        settingsSubScreen = SettingsSubScreen.DataUsage
+                                    },
+                                    onSuspiciousAppsClicked = {
+                                        settingsSubScreen = SettingsSubScreen.SuspiciousApps
+                                    },
+                                    onAboutClicked = {
+                                        settingsSubScreen = SettingsSubScreen.About
+                                    },
+                                    onPrivacyPolicyClicked = {
+                                        settingsSubScreen = SettingsSubScreen.PrivacyPolicy
+                                    },
+                                    onTermsClicked = {
+                                        settingsSubScreen = SettingsSubScreen.TermsOfService
+                                    },
+                                    onLogout = {
+                                        pendingLogout = true
+                                    },
+                                )
+                                SettingsSubScreen.IgnoreList -> IgnoreListSettingsScreen(
+                                    ignoredPackages = ignoredPackages.toList().sorted(),
+                                    availableProfiles = lastInventoryProfiles,
+                                    onBack = onBackToSettings,
+                                    onAddPackage = { packageName ->
+                                        val cleaned = packageName.trim()
+                                        if (cleaned.isNotBlank()) {
+                                            ignoredPackages = ignoredPackages + cleaned
+                                        }
+                                    },
+                                    onRemovePackage = { packageName ->
+                                        ignoredPackages = ignoredPackages - packageName
+                                    },
+                                )
+                                SettingsSubScreen.ScanSchedule -> ScanScheduleSettingsScreen(
+                                    selectedSchedule = scanScheduleSelection,
+                                    onBack = onBackToSettings,
+                                    onSelectionChanged = { scanScheduleSelection = it },
+                                )
+                                SettingsSubScreen.Theme -> ThemeSettingsScreen(
+                                    selectedTheme = pendingThemeSelection,
+                                    onBack = onBackToSettings,
+                                    onSelectionChanged = { pendingThemeSelection = it },
+                                )
+                                SettingsSubScreen.Language -> LanguageSettingsScreen(
+                                    selectedLanguage = pendingLanguageSelection,
+                                    onBack = onBackToSettings,
+                                    onSelectionChanged = { pendingLanguageSelection = it },
+                                )
+                                SettingsSubScreen.DataUsage -> DataUsageSettingsScreen(
+                                    hasUsageAccess = hasUsageAccess,
+                                    retentionDays = retentionSettings.retentionDays,
+                                    usageEventCount = lastUsageEvents.size,
+                                    inventoryEventCount = lastInventoryEvents.size,
+                                    networkEventCount = lastNetworkEvents.size,
+                                    activeAlertCount = visibleActiveAlerts.size,
+                                    ignoredPackageCount = ignoredPackages.size,
+                                    onBack = onBackToSettings,
+                                )
+                                SettingsSubScreen.About -> InfoSettingsScreen(
+                                    title = "About CyxWatch",
+                                    body = "CyxWatch is a local-first privacy observability app that helps you identify suspicious app behavior on your device. " +
+                                        "Its focus is transparent reporting and evidence-first protection alerts, without cloud dependence.",
+                                    onBack = onBackToSettings,
+                                )
+                                SettingsSubScreen.PrivacyPolicy -> InfoSettingsScreen(
+                                    title = "Privacy Policy",
+                                    body = "CyxWatch keeps all processing and storage on-device by default. " +
+                                        "Usage-access and network summaries are retained per your retention settings. " +
+                                        "No packet payloads are collected, and we do not sell user telemetry.\n\n" +
+                                        "This screen reflects app-local behavior for this build.",
+                                    onBack = onBackToSettings,
+                                )
+                                SettingsSubScreen.TermsOfService -> InfoSettingsScreen(
+                                    title = "Terms of Service",
+                                    body = "By using this app, you agree that CyxWatch is an observability utility, not a security guarantee. " +
+                                        "Alerts are based on app behavior patterns and can include false positives. " +
+                                        "Use responsibly and review flagged activity in context.",
+                                    onBack = onBackToSettings,
+                                )
+                                SettingsSubScreen.SuspiciousApps -> SuspiciousAppReportScreen(
+                                    reports = suspiciousAppSummaries,
+                                    onBack = onBackToSettings,
+                                )
+                            }
                         }
                     }
                 } else if (isTransparencySettingsOpen) {
@@ -1063,6 +1215,54 @@ fun CyxWatchApp(
                     }
                 }
             }
+        }
+
+        if (pendingRealtimeDisable) {
+            AlertDialog(
+                onDismissRequest = { pendingRealtimeDisable = false },
+                title = { Text("Disable monitoring?") },
+                text = { Text("Your device will no longer be protected.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            isRealtimeProtectionEnabled = false
+                            clearDetailState()
+                            clearAlertHistory()
+                            pendingRealtimeDisable = false
+                        },
+                    ) {
+                        Text("Disable")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingRealtimeDisable = false }) {
+                        Text("Cancel")
+                    }
+                },
+            )
+        }
+
+        if (pendingLogout) {
+            AlertDialog(
+                onDismissRequest = { pendingLogout = false },
+                title = { Text("Sign out") },
+                text = { Text("Are you sure you want to log out?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            performLogout()
+                            pendingLogout = false
+                        },
+                    ) {
+                        Text("Log Out", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingLogout = false }) {
+                        Text("Cancel")
+                    }
+                },
+            )
         }
     }
 }
@@ -1616,7 +1816,7 @@ private fun DashboardHeroCard(
                     ) {
                         Image(
                             modifier = Modifier.padding(6.dp),
-                            painter = painterResource(R.drawable.ic_cyxwatch_logo),
+                            painter = painterResource(R.drawable.cyxwatch_logo_new),
                             contentDescription = "CyxWatch logo",
                         )
                     }
@@ -2407,3 +2607,4 @@ private fun pruneLoadedEvents(
             (networkEvents.size - retainedNetworkEvents.size),
     )
 }
+
