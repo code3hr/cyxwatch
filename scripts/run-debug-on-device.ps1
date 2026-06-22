@@ -40,9 +40,15 @@ Set-Location $projectRoot
 
 Write-Host "Checking connected device..." -ForegroundColor Cyan
 $adbDevices = adb devices
-$connected = $adbDevices | Select-String "^\s*([^\s]+)\s+device$" | ForEach-Object { $_.Matches[0].Groups[1].Value }
-$authorized = $adbDevices | Select-String "^\s*([^\s]+)\s+unauthorized$" | ForEach-Object { $_.Matches[0].Groups[1].Value }
-$offline = $adbDevices | Select-String "^\s*([^\s]+)\s+offline$" | ForEach-Object { $_.Matches[0].Groups[1].Value }
+$connected = @(
+    $adbDevices | Select-String "^\s*([^\s]+)\s+device$" | ForEach-Object { $_.Matches[0].Groups[1].Value }
+)
+$authorized = @(
+    $adbDevices | Select-String "^\s*([^\s]+)\s+unauthorized$" | ForEach-Object { $_.Matches[0].Groups[1].Value }
+)
+$offline = @(
+    $adbDevices | Select-String "^\s*([^\s]+)\s+offline$" | ForEach-Object { $_.Matches[0].Groups[1].Value }
+)
 
 if (-not $connected) {
     if ($authorized) { Fail "ADB sees an unauthorized device. Accept the RSA debug prompt on the phone." }
@@ -77,7 +83,7 @@ if (-not (Test-Path $apkPath)) {
 
 if (-not $NoInstall) {
     Write-Host "Installing APK: $apkPath" -ForegroundColor Cyan
-    adb @deviceArg install -r --allow-test-apis $apkPath
+    adb @deviceArg install -r $apkPath
     if ($LASTEXITCODE -ne 0) { Fail "APK install failed." }
 }
 
