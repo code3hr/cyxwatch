@@ -21,12 +21,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -34,9 +36,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -56,6 +60,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -112,13 +118,14 @@ import com.cyxwatch.app.ui.InventoryEvidenceScreen
 import com.cyxwatch.app.ui.LaunchGateScreen
 import com.cyxwatch.app.ui.ScrollNavigationControls
 import com.cyxwatch.app.ui.ScorePanelSurface
-import com.cyxwatch.app.ui.ScoreEvidenceScreen
 import com.cyxwatch.app.ui.TransparencySettingsScreen
 import com.cyxwatch.app.ui.TransparencySettingsUiState
 import com.cyxwatch.app.ui.UsageAccessScreen
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -347,6 +354,17 @@ fun CyxWatchApp(
         suppressedAlertCount = 0
     }
 
+    fun dismissThreatByReason(reason: ScoreReason) {
+        activeAlerts = activeAlerts.filterNot { alert ->
+            alert.packageName == reason.packageName &&
+                alert.rule == reason.rule &&
+                alert.evidenceEventIds.toSet() == reason.evidenceEventIds.toSet()
+        }
+        if (activeAlerts.isEmpty()) {
+            suppressedAlertCount = 0
+        }
+    }
+
     fun applyRetentionDays(days: Int) {
         retentionSettings = retentionSettingsRepository.writeRetentionDays(days)
         val pruneResult = pruneLoadedEvents(
@@ -504,6 +522,15 @@ fun CyxWatchApp(
         selectedProfile != null ||
         selectedDailySummary != null
     )
+    var selectedMainTab by remember { mutableStateOf(MainTab.Dashboard) }
+    var alertsTabFilter by remember { mutableStateOf(AlertSeverityFilter.All) }
+    var monitorTabFilter by remember { mutableStateOf(MonitorStatusFilter.All) }
+    var reportsPeriod by remember { mutableStateOf(ReportsPeriod.Daily) }
+    var isRealtimeProtectionEnabled by remember { mutableStateOf(true) }
+    var isNotificationsEnabled by remember { mutableStateOf(true) }
+    var pendingThemeSelection by remember { mutableStateOf("Dark") }
+    var pendingLanguageSelection by remember { mutableStateOf("English") }
+    var scanScheduleSelection by remember { mutableStateOf("Every 24h") }
     val activity = LocalContext.current as? Activity
 
     LaunchedEffect(activity, isProtectedEvidenceScreen) {
@@ -541,6 +568,13 @@ fun CyxWatchApp(
         outline = Color(0xFF7F8FB2),
     )
 
+    val showPrimaryTabs = hasUsageAccess &&
+        selectedProfile == null &&
+        selectedPermissionForEvidence == null &&
+        selectedScoreReason == null &&
+        selectedDailySummary == null &&
+        !isTransparencySettingsOpen
+
     MaterialTheme(colorScheme = appColorScheme) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -548,25 +582,21 @@ fun CyxWatchApp(
         ) {
             Scaffold(
                 topBar = {
-                    TopAppBar(
-                        title = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Image(
-                                    modifier = Modifier.size(28.dp),
-                                    painter = painterResource(R.drawable.ic_cyxwatch_logo),
-                                    contentDescription = "CyxWatch logo",
-                                )
-                                Spacer(modifier = Modifier.size(8.dp))
-                                Column {
-                                    Text("CyxWatch", style = MaterialTheme.typography.titleLarge)
-                                    Text(
-                                        text = if (vpnModeState.isEnabled) "Advanced visibility active" else "Observability ready",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                            }
-                        },
-                    )
+                    if (showPrimaryTabs && selectedMainTab != MainTab.Settings) {
+                        CyxWatchTopBar(
+                            activeTab = selectedMainTab,
+                            onAlertTabSelected = { selectedMainTab = MainTab.Alerts },
+                            onSettingsTabSelected = { selectedMainTab = MainTab.Settings },
+                        )
+                    }
+                },
+                bottomBar = {
+                    if (showPrimaryTabs) {
+                        CyxWatchBottomNav(
+                            selectedTab = selectedMainTab,
+                            onTabSelected = { selectedMainTab = it },
+                        )
+                    }
                 },
             ) { contentPadding ->
                 if (!launchGateState.hasCompletedLaunchGate && !hasUsageAccess) {
@@ -582,9 +612,6 @@ fun CyxWatchApp(
                         onOpenPrivacyControlsClick = {
                             completeLaunchGate(openedPrivacyControlsFromGate = true)
                             isTransparencySettingsOpen = true
-                        },
-                        onBackToDashboardClick = {
-                            completeLaunchGate(openedPrivacyControlsFromGate = false)
                         },
                     )
                 } else if (!hasUsageAccess) {
@@ -607,245 +634,312 @@ fun CyxWatchApp(
                             consentState = consentRepository.readState()
                         },
                     )
-                } else if (
-                    selectedProfile == null &&
-                    selectedScoreReason == null &&
-                    selectedDailySummary == null &&
-                    !isTransparencySettingsOpen
-                ) {
-                        DashboardShell(
-                        modifier = Modifier.padding(contentPadding),
-                        collectionStatus = collectStatus,
-                        runtimeIntegrityNotice = runtimeIntegrityBlockMessage,
-                        onCollectEventsClick = {
-                            if (isCollectingUsage) return@DashboardShell
-                            val now = Instant.now()
-                            val throttleDecision = collectionThrottle.tryCollect("collect_usage", now)
-                            if (!throttleDecision.allowed) {
-                                collectStatus = "Usage collection is throttled. Try again in ${throttleDecision.retryAfterSeconds} second(s)."
-                                return@DashboardShell
-                            }
-                            isCollectingUsage = true
-                            collectStatus = "Collecting usage timeline..."
-                            coroutineScope.launch {
-                                try {
-                                    when (val result = withContext(Dispatchers.IO) {
-                                        usageAccessCollectorUseCase.collectLast24hUsageEvents()
-                                    }) {
-                                        is UsageCollectionResult.Success -> {
-                                            val retainedEvents = withContext(Dispatchers.Default) {
-                                                retentionPolicy.pruneEvents(
-                                                    events = result.events,
-                                                    retentionDays = retentionSettings.retentionDays,
-                                                    now = Instant.now(),
-                                                )
+                } else if (showPrimaryTabs) {
+                    when (selectedMainTab) {
+                        MainTab.Dashboard -> RedesignedDashboardScreen(
+                            modifier = Modifier.padding(contentPadding),
+                            activeAlerts = activeAlerts,
+                            suppressedAlertCount = suppressedAlertCount,
+                            lastUsageEvents = lastUsageEvents,
+                            lastNetworkEvents = lastNetworkEvents,
+                            lastInventoryProfiles = lastInventoryProfiles,
+                            privacyScore = privacyScore,
+                            retentionStatus = retentionStatus,
+                            vpnModeEnabled = vpnModeState.isEnabled,
+                            runtimeIntegrityNotice = runtimeIntegrityBlockMessage,
+                            isCollectingUsage = isCollectingUsage,
+                            isCollectingNetwork = isCollectingNetwork,
+                            isCollectingInventory = isCollectingInventory,
+                            collectStatus = collectStatus,
+                            networkStatus = networkStatus,
+                            inventoryStatus = inventoryStatus,
+                            inventoryChangeStatus = inventoryChangeStatus,
+                            retentionSettings = retentionSettings,
+                            allowedRetentionDays = retentionPolicy.allowedRetentionDays(),
+                            onCollectUsageClick = {
+                                if (isCollectingUsage) return@RedesignedDashboardScreen
+                                val now = Instant.now()
+                                val throttleDecision = collectionThrottle.tryCollect("collect_usage", now)
+                                if (!throttleDecision.allowed) {
+                                    collectStatus =
+                                        "Usage collection is throttled. Try again in ${throttleDecision.retryAfterSeconds} second(s)."
+                                    return@RedesignedDashboardScreen
+                                }
+                                isCollectingUsage = true
+                                collectStatus = "Collecting usage timeline..."
+                                coroutineScope.launch {
+                                    try {
+                                        when (val result = withContext(Dispatchers.IO) {
+                                            usageAccessCollectorUseCase.collectLast24hUsageEvents()
+                                        }) {
+                                            is UsageCollectionResult.Success -> {
+                                                val retainedEvents = withContext(Dispatchers.Default) {
+                                                    retentionPolicy.pruneEvents(
+                                                        events = result.events,
+                                                        retentionDays = retentionSettings.retentionDays,
+                                                        now = Instant.now(),
+                                                    )
+                                                }
+                                                lastUsageEvents = retainedEvents
+                                                val prunedCount = result.events.size - retainedEvents.size
+                                                collectStatus = if (retainedEvents.isEmpty()) {
+                                                    "No events found for the last 24h."
+                                                } else {
+                                                    "Collected ${retainedEvents.size} usage event(s)."
+                                                }
+                                                retentionStatus = if (prunedCount > 0) {
+                                                    "Retention window: ${retentionSettings.retentionDays} days. Pruned $prunedCount usage event(s)."
+                                                } else {
+                                                    "Retention window: ${retentionSettings.retentionDays} days."
+                                                }
+                                                refreshAlerts()
                                             }
-                                            lastUsageEvents = retainedEvents
-                                            val prunedCount = result.events.size - retainedEvents.size
-                                            collectStatus = if (retainedEvents.isEmpty()) {
-                                                "No events found for the last 24h."
-                                            } else {
-                                                "Collected ${retainedEvents.size} usage event(s)."
-                                            }
-                                            retentionStatus = if (prunedCount > 0) {
-                                                "Retention window: ${retentionSettings.retentionDays} days. Pruned $prunedCount usage event(s)."
-                                            } else {
-                                                "Retention window: ${retentionSettings.retentionDays} days."
-                                            }
-                                            refreshAlerts()
-                                        }
 
-                                        UsageCollectionResult.PermissionMissing -> {
-                                            lastUsageEvents = emptyList()
-                                            hasUsageAccess = false
-                                            consentRepository.recordCheckResult(false, System.currentTimeMillis())
-                                            consentState = consentRepository.readState()
-                                            maybeNotifyUsageAccessMissing()
-                                            collectStatus = "Usage access is not currently granted."
+                                            UsageCollectionResult.PermissionMissing -> {
+                                                lastUsageEvents = emptyList()
+                                                hasUsageAccess = false
+                                                consentRepository.recordCheckResult(false, System.currentTimeMillis())
+                                                consentState = consentRepository.readState()
+                                                maybeNotifyUsageAccessMissing()
+                                                collectStatus = "Usage access is not currently granted."
+                                            }
                                         }
+                                    } catch (exception: Exception) {
+                                        collectStatus = "Usage collection failed: ${exception.localizedMessage ?: "Unknown error"}"
+                                    } finally {
+                                        isCollectingUsage = false
                                     }
-                                } catch (exception: Exception) {
-                                    collectStatus = "Usage collection failed: ${exception.localizedMessage ?: "Unknown error"}"
-                                } finally {
-                                    isCollectingUsage = false
                                 }
-                            }
-                        },
-                        networkStatus = networkStatus,
-                        networkEvents = lastNetworkEvents,
-                        onCollectNetworkEventsClick = {
-                            if (isCollectingNetwork) return@DashboardShell
-                            val now = Instant.now()
-                            val throttleDecision = collectionThrottle.tryCollect("collect_network", now)
-                            if (!throttleDecision.allowed) {
-                                networkStatus = "Network collection is throttled. Try again in ${throttleDecision.retryAfterSeconds} second(s)."
-                                return@DashboardShell
-                            }
-                            isCollectingNetwork = true
-                            networkStatus = "Collecting network usage..."
-                            coroutineScope.launch {
-                                try {
-                                    when (val result = withContext(Dispatchers.IO) {
-                                        collectNetworkUsageUseCase.collectLast24hNetworkUsageEvents(
-                                            isVpnModeEnabled = vpnModeState.isEnabled,
-                                        )
-                                    }) {
-                                        is UsageCollectionResult.Success -> {
-                                            if (vpnModeState.isEnabled) {
-                                                syncVpnStateTotals()
+                            },
+                            onCollectNetworkClick = {
+                                if (isCollectingNetwork) return@RedesignedDashboardScreen
+                                val now = Instant.now()
+                                val throttleDecision = collectionThrottle.tryCollect("collect_network", now)
+                                if (!throttleDecision.allowed) {
+                                    networkStatus = "Network collection is throttled. Try again in ${throttleDecision.retryAfterSeconds} second(s)."
+                                    return@RedesignedDashboardScreen
+                                }
+                                isCollectingNetwork = true
+                                networkStatus = "Collecting network usage..."
+                                coroutineScope.launch {
+                                    try {
+                                        when (val result = withContext(Dispatchers.IO) {
+                                            collectNetworkUsageUseCase.collectLast24hNetworkUsageEvents(
+                                                isVpnModeEnabled = vpnModeState.isEnabled,
+                                            )
+                                        }) {
+                                            is UsageCollectionResult.Success -> {
+                                                if (vpnModeState.isEnabled) {
+                                                    syncVpnStateTotals()
+                                                }
+                                                val retainedEvents = withContext(Dispatchers.Default) {
+                                                    retentionPolicy.pruneEvents(
+                                                        events = result.events,
+                                                        retentionDays = retentionSettings.retentionDays,
+                                                        now = Instant.now(),
+                                                    )
+                                                }
+                                                lastNetworkEvents = retainedEvents
+                                                val prunedCount = result.events.size - retainedEvents.size
+                                                networkStatus = if (retainedEvents.isEmpty()) {
+                                                    "No network traffic was detected in the last 24h."
+                                                } else {
+                                                    "Collected ${retainedEvents.size} network usage event(s)."
+                                                }
+                                                retentionStatus = if (prunedCount > 0) {
+                                                    "Retention window: ${retentionSettings.retentionDays} days. Pruned $prunedCount network event(s)."
+                                                } else {
+                                                    "Retention window: ${retentionSettings.retentionDays} days."
+                                                }
+                                                refreshAlerts()
                                             }
-                                            val retainedEvents = withContext(Dispatchers.Default) {
-                                                retentionPolicy.pruneEvents(
-                                                    events = result.events,
-                                                    retentionDays = retentionSettings.retentionDays,
-                                                    now = Instant.now(),
-                                                )
-                                            }
-                                            lastNetworkEvents = retainedEvents
-                                            val prunedCount = result.events.size - retainedEvents.size
-                                            networkStatus = if (retainedEvents.isEmpty()) {
-                                                "No network traffic was detected in the last 24h."
-                                            } else {
-                                                "Collected ${retainedEvents.size} network usage event(s)."
-                                            }
-                                            retentionStatus = if (prunedCount > 0) {
-                                                "Retention window: ${retentionSettings.retentionDays} days. Pruned $prunedCount network event(s)."
-                                            } else {
-                                                "Retention window: ${retentionSettings.retentionDays} days."
-                                            }
-                                            refreshAlerts()
-                                        }
 
-                                        UsageCollectionResult.PermissionMissing -> {
-                                            lastNetworkEvents = emptyList()
-                                            hasUsageAccess = false
-                                            consentRepository.recordCheckResult(false, System.currentTimeMillis())
-                                            consentState = consentRepository.readState()
-                                            maybeNotifyUsageAccessMissing()
-                                            networkStatus = "Usage access is not currently granted."
+                                            UsageCollectionResult.PermissionMissing -> {
+                                                lastNetworkEvents = emptyList()
+                                                hasUsageAccess = false
+                                                consentRepository.recordCheckResult(false, System.currentTimeMillis())
+                                                consentState = consentRepository.readState()
+                                                maybeNotifyUsageAccessMissing()
+                                                networkStatus = "Usage access is not currently granted."
+                                            }
                                         }
+                                    } catch (exception: Exception) {
+                                        networkStatus = "Network collection failed: ${exception.localizedMessage ?: "Unknown error"}"
+                                    } finally {
+                                        isCollectingNetwork = false
                                     }
-                                } catch (exception: Exception) {
-                                    networkStatus = "Network collection failed: ${exception.localizedMessage ?: "Unknown error"}"
-                                } finally {
-                                    isCollectingNetwork = false
                                 }
-                            }
-                        },
-                        inventoryStatus = inventoryStatus,
-                        inventoryChangeStatus = inventoryChangeStatus,
-                        retentionSettings = retentionSettings,
-                        retentionStatus = retentionStatus,
-                        hasInventory = lastInventoryProfiles.isNotEmpty(),
-                        usageEvents = lastUsageEvents,
-                        privacyScore = privacyScore,
-                        allowedRetentionDays = retentionPolicy.allowedRetentionDays(),
-                        isCollectingInventory = isCollectingInventory,
-                        onCollectInventoryClick = {
-                            val now = Instant.now()
-                            val throttleDecision = collectionThrottle.tryCollect("collect_inventory", now)
-                            if (!throttleDecision.allowed) {
-                                inventoryStatus = "Inventory refresh is throttled. Try again in ${throttleDecision.retryAfterSeconds} second(s)."
-                                return@DashboardShell
-                            }
-                            isCollectingInventory = true
-                            coroutineScope.launch {
-                                try {
-                                    val refreshResult = withContext(Dispatchers.IO) {
-                                        refreshAppInventoryUseCase.refresh()
-                                    }
-                                    val profiles = refreshResult.currentProfiles
-                                    val inventoryChanges = refreshResult.inventoryChanges
-                                    val events = refreshResult.inventoryEvents
-                                    val launchableCount = profiles.count { it.isLaunchable }
-                                    val retainedEvents = withContext(Dispatchers.Default) {
-                                        retentionPolicy.pruneEvents(
-                                            events = events,
-                                            retentionDays = retentionSettings.retentionDays,
-                                            now = now,
-                                        )
-                                    }
-                                    val prunedCount = events.size - retainedEvents.size
-                                    lastInventoryProfiles = profiles
-                                    lastInventoryEvents = retainedEvents
-                                    inventoryStatus = if (profiles.isEmpty()) {
-                                        "No installed app profiles found."
-                                    } else {
-                                        "Loaded ${profiles.size} app profiles (${launchableCount} launchable)."
-                                    }
-                                    inventoryChangeStatus = if (inventoryChanges.isEmpty()) {
-                                        "No install or permission deltas since last refresh."
-                                    } else {
-                                        "Detected ${inventoryChanges.size} inventory change(s). "
-                                            .plus(describeInventoryChanges(inventoryChanges))
-                                            .plus(" | Generated ${retainedEvents.size} retained evidence event(s).")
-                                    }
-                                    retentionStatus = if (prunedCount > 0) {
-                                        "Retention window: ${retentionSettings.retentionDays} days. Pruned $prunedCount inventory event(s)."
-                                    } else {
-                                        "Retention window: ${retentionSettings.retentionDays} days."
-                                    }
-                                    refreshAlerts()
-                                } catch (exception: Exception) {
-                                    inventoryStatus = "Inventory refresh failed: ${exception.localizedMessage ?: "Unknown error"}"
-                                    inventoryChangeStatus = "Try again from dashboard."
-                                } finally {
-                                    isCollectingInventory = false
+                            },
+                            onCollectInventoryClick = {
+                                val now = Instant.now()
+                                val throttleDecision = collectionThrottle.tryCollect("collect_inventory", now)
+                                if (!throttleDecision.allowed) {
+                                    inventoryStatus = "Inventory refresh is throttled. Try again in ${throttleDecision.retryAfterSeconds} second(s)."
+                                    return@RedesignedDashboardScreen
                                 }
-                            }
-                        },
-                        alerts = activeAlerts,
-                        suppressedAlertCount = suppressedAlertCount,
-                        onClearAlertHistoryClick = ::clearAlertHistory,
-                        isVpnModeEnabled = vpnModeState.isEnabled,
-                        onEnableVpnModeClick = ::requestVpnModeEnable,
-                        onDisableVpnModeClick = ::disableVpnMode,
-                        liveVpnThroughputSamples = liveVpnThroughputSamples,
-                        onOpenLatestProfileClick = {
-                            selectedProfile = lastInventoryProfiles.firstOrNull()
-                            selectedPermissionForEvidence = null
-                        },
-                        onOpenScoreReasonClick = { reason ->
-                            selectedScoreReason = reason
-                        },
-                        onOpenAlertClick = { alert ->
-                            selectedScoreReason = ScoreReason(
-                                rule = alert.rule,
-                                message = alert.message,
-                                packageName = alert.packageName,
-                                delta = alert.triggerDelta,
-                                evidenceEventIds = alert.evidenceEventIds,
-                            )
-                        },
-                        onOpenDailySummaryClick = {
-                            selectedDailySummary = buildDailySummaryUseCase.build(
-                                score = privacyScore,
-                                events = scoringEvents,
-                                alerts = activeAlerts,
-                                now = Instant.now(),
-                            )
-                        },
-                        isCollectingUsage = isCollectingUsage,
-                        isCollectingNetwork = isCollectingNetwork,
-                        onRetentionDaysClick = ::applyRetentionDays,
-                        onPruneNowClick = ::pruneLoadedEvidenceNow,
-                        onDeleteLoadedEventsClick = ::deleteLoadedEvidence,
-                        liveVpnTrafficTotals = liveVpnTrafficTotals,
-                        liveVpnTopDestinations = liveVpnDestinations,
-                        liveMetricsLastUpdatedLabel = formatTimestamp(dashboardLastUpdated),
-                        onOpenTransparencySettingsClick = {
-                            syncVpnStateTotals()
-                            isTransparencySettingsOpen = true
-                        },
-                        onOpenAlertProfileClick = { packageName ->
-                            val matchingProfile = lastInventoryProfiles.firstOrNull { it.packageName == packageName }
-                            if (matchingProfile != null) {
-                                selectedProfile = matchingProfile
+                                isCollectingInventory = true
+                                coroutineScope.launch {
+                                    try {
+                                        val refreshResult = withContext(Dispatchers.IO) {
+                                            refreshAppInventoryUseCase.refresh()
+                                        }
+                                        val profiles = refreshResult.currentProfiles
+                                        val inventoryChanges = refreshResult.inventoryChanges
+                                        val events = refreshResult.inventoryEvents
+                                        val launchableCount = profiles.count { it.isLaunchable }
+                                        val retainedEvents = withContext(Dispatchers.Default) {
+                                            retentionPolicy.pruneEvents(
+                                                events = events,
+                                                retentionDays = retentionSettings.retentionDays,
+                                                now = now,
+                                            )
+                                        }
+                                        val prunedCount = events.size - retainedEvents.size
+                                        lastInventoryProfiles = profiles
+                                        lastInventoryEvents = retainedEvents
+                                        inventoryStatus = if (profiles.isEmpty()) {
+                                            "No installed app profiles found."
+                                        } else {
+                                            "Loaded ${profiles.size} app profiles (${launchableCount} launchable)."
+                                        }
+                                        inventoryChangeStatus = if (inventoryChanges.isEmpty()) {
+                                            "No install or permission deltas since last refresh."
+                                        } else {
+                                            "Detected ${inventoryChanges.size} inventory change(s). "
+                                                .plus(describeInventoryChanges(inventoryChanges))
+                                                .plus(" | Generated ${retainedEvents.size} retained evidence event(s).")
+                                        }
+                                        retentionStatus = if (prunedCount > 0) {
+                                            "Retention window: ${retentionSettings.retentionDays} days. Pruned $prunedCount inventory event(s)."
+                                        } else {
+                                            "Retention window: ${retentionSettings.retentionDays} days."
+                                        }
+                                        refreshAlerts()
+                                    } catch (exception: Exception) {
+                                        inventoryStatus = "Inventory refresh failed: ${exception.localizedMessage ?: "Unknown error"}"
+                                        inventoryChangeStatus = "Try again from dashboard."
+                                    } finally {
+                                        isCollectingInventory = false
+                                    }
+                                }
+                            },
+                            onOpenProfile = {
+                                selectedProfile = it
                                 selectedPermissionForEvidence = null
-                                selectedDailySummary = null
-                            }
-                        },
+                            },
+                            onOpenAlert = {
+                                selectedScoreReason = ScoreReason(
+                                    rule = it.rule,
+                                    message = it.message,
+                                    packageName = it.packageName,
+                                    delta = it.triggerDelta,
+                                    evidenceEventIds = it.evidenceEventIds,
+                                )
+                            },
+                            onOpenDailySummary = {
+                                selectedDailySummary = buildDailySummaryUseCase.build(
+                                    score = privacyScore,
+                                    events = scoringEvents,
+                                    alerts = activeAlerts,
+                                    now = Instant.now(),
+                                )
+                            },
+                            onOpenAllAlerts = { selectedMainTab = MainTab.Alerts },
+                            onOpenMonitoredApps = { selectedMainTab = MainTab.Monitor },
+                            onOpenTransparencySettings = {
+                                syncVpnStateTotals()
+                                isTransparencySettingsOpen = true
+                                selectedMainTab = MainTab.Settings
+                            },
                         )
+                        MainTab.Alerts -> {
+                            AlertsScreen(
+                                modifier = Modifier.padding(contentPadding),
+                                alerts = activeAlerts,
+                                activeFilter = alertsTabFilter,
+                                onFilterSelected = { alertsTabFilter = it },
+                                onAlertClick = { alert ->
+                                    selectedScoreReason = ScoreReason(
+                                        rule = alert.rule,
+                                        message = alert.message,
+                                        packageName = alert.packageName,
+                                        delta = alert.triggerDelta,
+                                        evidenceEventIds = alert.evidenceEventIds,
+                                    )
+                                },
+                            )
+                        }
+                        MainTab.Monitor -> {
+                            MonitorScreen(
+                                modifier = Modifier.padding(contentPadding),
+                                appProfiles = lastInventoryProfiles,
+                                appLabelsByPackageName = appLabelsByPackageName,
+                                riskByApp = privacyScore.reasons.groupBy { it.packageName },
+                                usageEvents = lastUsageEvents,
+                                activeFilter = monitorTabFilter,
+                                onFilterSelected = { monitorTabFilter = it },
+                                onAppClick = { selectedProfile = it },
+                            )
+                        }
+                        MainTab.Reports -> {
+                            ReportsScreen(
+                                modifier = Modifier.padding(contentPadding),
+                                reportsPeriod = reportsPeriod,
+                                onPeriodChanged = { reportsPeriod = it },
+                                alerts = activeAlerts,
+                                onThreatClick = {
+                                    selectedScoreReason = ScoreReason(
+                                        rule = it.rule,
+                                        message = it.message,
+                                        packageName = it.packageName,
+                                        delta = it.triggerDelta,
+                                        evidenceEventIds = it.evidenceEventIds,
+                                    )
+                                },
+                                privacyScore = privacyScore,
+                                onOpenAlertScreen = { selectedMainTab = MainTab.Alerts },
+                            )
+                        }
+                        MainTab.Settings -> {
+                            SettingsScreen(
+                                modifier = Modifier.padding(contentPadding),
+                                realTimeProtectionEnabled = isRealtimeProtectionEnabled,
+                                notificationsEnabled = isNotificationsEnabled,
+                                theme = pendingThemeSelection,
+                                language = pendingLanguageSelection,
+                                scanSchedule = scanScheduleSelection,
+                                onRealtimeProtectionToggled = { isRealtimeProtectionEnabled = it },
+                                onNotificationsToggled = { isNotificationsEnabled = it },
+                                onIgnoreList = {},
+                                onScanScheduleClicked = {
+                                    scanScheduleSelection = when (scanScheduleSelection) {
+                                        "Every 6h" -> "Every 12h"
+                                        "Every 12h" -> "Every 24h"
+                                        else -> "Every 6h"
+                                    }
+                                },
+                                onThemeClicked = {
+                                    pendingThemeSelection = when (pendingThemeSelection) {
+                                        "Dark" -> "Light"
+                                        "Light" -> "Dark"
+                                        else -> "System"
+                                    }
+                                },
+                                onLanguageClicked = {
+                                    pendingLanguageSelection = when (pendingLanguageSelection) {
+                                        "English" -> "Spanish"
+                                        "Spanish" -> "English"
+                                        else -> "English"
+                                    }
+                                },
+                                onDataUsageClicked = {},
+                                onAboutClicked = {},
+                                onPrivacyPolicyClicked = {},
+                                onTermsClicked = {},
+                                onLogout = {},
+                            )
+                        }
+                    }
                 } else if (isTransparencySettingsOpen) {
                     TransparencySettingsScreen(
                         state = TransparencySettingsUiState(
@@ -888,13 +982,21 @@ fun CyxWatchApp(
                     )
                 } else if (selectedScoreReason != null) {
                     val selectedReasonValue = selectedScoreReason!!
-                    ScoreEvidenceScreen(
+                    ThreatDetailsScreen(
                         reason = selectedReasonValue,
                         evidenceEvents = evidenceEventsForScoreReason(
                             reason = selectedReasonValue,
                             events = scoringEvents,
                         ),
                         onBack = { selectedScoreReason = null },
+                        onRestrictApp = {
+                            dismissThreatByReason(selectedReasonValue)
+                            selectedScoreReason = null
+                        },
+                        onIgnore = {
+                            dismissThreatByReason(selectedReasonValue)
+                            selectedScoreReason = null
+                        },
                         appLabelsByPackageName = appLabelsByPackageName,
                     )
                 } else if (selectedDailySummary != null) {
