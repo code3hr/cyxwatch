@@ -150,6 +150,20 @@ powershell -ExecutionPolicy Bypass -File scripts\run-debug-on-device.ps1 -NoBuil
 powershell -ExecutionPolicy Bypass -File scripts\run-debug-on-device.ps1 -NoLaunch -LogLineCount 80
 ```
 
+For a quick startup verification loop (install, launch, running check, startup log capture), use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run-device-smoke.ps1
+```
+
+Useful options:
+
+- `-NoBuild` to reuse the already-built APK
+- `-NoInstall` / `-NoLaunch` for custom flows
+- `-DeviceId <serial>` if more than one device is connected
+- `-PostLaunchWaitSeconds 10` to wait longer before log capture
+- `-LogTailLines 300` to capture more startup lines
+
 Requirements:
 
 - Android SDK `adb` available in `PATH`.
