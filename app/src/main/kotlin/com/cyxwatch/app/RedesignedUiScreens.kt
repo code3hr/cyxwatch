@@ -692,42 +692,54 @@ fun RedesignedDashboardScreen(
             border = androidx.compose.foundation.BorderStroke(1.dp, UiTokens.Border),
         ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onCollectUsageClick, enabled = !isCollectingUsage) {
-                        Text(if (isCollectingUsage) "Collecting..." else "Collect usage")
-                    }
-                    OutlinedButton(onClick = onCollectNetworkClick, enabled = !isCollectingNetwork) {
-                        Text(if (isCollectingNetwork) "Collecting..." else "Collect network")
-                    }
-                    OutlinedButton(onClick = onCollectInventoryClick, enabled = !isCollectingInventory) {
-                        Text(if (isCollectingInventory) "Collecting..." else "Collect apps")
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DashboardCollectionAction(
+                        label = if (isCollectingUsage) "Collecting..." else "Collect usage",
+                        enabled = !isCollectingUsage,
+                        onClick = onCollectUsageClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DashboardCollectionAction(
+                        label = if (isCollectingNetwork) "Collecting..." else "Collect network",
+                        enabled = !isCollectingNetwork,
+                        onClick = onCollectNetworkClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DashboardCollectionAction(
+                        label = if (isCollectingInventory) "Collecting..." else "Collect apps",
+                        enabled = !isCollectingInventory,
+                        onClick = onCollectInventoryClick,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-                Text("Collection status: $collectStatus", style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                DashboardStatusLine("Collection status", collectStatus)
                 if (networkStatus.isNotBlank()) {
-                    Text("Network: $networkStatus", style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                    DashboardStatusLine("Network", networkStatus)
                 }
                 if (inventoryStatus.isNotBlank()) {
-                    Text("Apps: $inventoryStatus", style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                    DashboardStatusLine("Apps", inventoryStatus)
                 }
                 if (retentionStatus.isNotBlank()) {
-                    Text("Retention: $retentionStatus", style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                    DashboardStatusLine("Retention", retentionStatus)
                 }
                 if (inventoryChangeStatus.isNotBlank()) {
-                    Text(inventoryChangeStatus, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                    DashboardStatusLine("Inventory", inventoryChangeStatus, compact = true)
                 }
                 if (usageEventsIn24h > 0 || networkEventsIn24h > 0) {
-                    Text(
-                        "Data seen in last 24h: $usageEventsIn24h usage events, $networkEventsIn24h network events",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = UiTokens.TextSecondary,
+                    DashboardStatusLine(
+                        "Last 24h",
+                        "$usageEventsIn24h usage event(s), $networkEventsIn24h network event(s)",
+                        compact = true,
                     )
                 }
                 if (allowedRetentionDays.isNotEmpty()) {
                     val selectedRetention = retentionSettings.retentionDays
                     val min = allowedRetentionDays.minOrNull() ?: selectedRetention
                     val max = allowedRetentionDays.maxOrNull() ?: selectedRetention
-                    Text("Retention window: $selectedRetention days (allowed $min-$max)", style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                    DashboardStatusLine("Retention window", "$selectedRetention days (allowed $min-$max)")
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -772,6 +784,53 @@ fun DashboardMetric(
             style = MaterialTheme.typography.labelSmall,
             color = UiTokens.TextSecondary,
             textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun DashboardCollectionAction(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 40.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun DashboardStatusLine(
+    label: String,
+    value: String,
+    compact: Boolean = false,
+) {
+    val lines = if (compact) 2 else 1
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            "$label:",
+            color = UiTokens.TextMuted,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.width(104.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodySmall,
+            color = UiTokens.TextSecondary,
+            modifier = Modifier.weight(1f),
+            maxLines = lines,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
