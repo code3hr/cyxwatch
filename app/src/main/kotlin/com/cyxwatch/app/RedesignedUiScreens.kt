@@ -154,6 +154,7 @@ data class SuspiciousAppSummary(
     val reportCount: Int,
     val latestTimestampLabel: String,
     val topReason: String,
+    val source: String = "Local observations",
 )
 
 private fun alertSeverity(alert: PrivacyAlert): ThreatSeverity = when {
@@ -2136,7 +2137,7 @@ fun SuspiciousAppReportScreen(
 ) {
     SettingsDetailContainer(
         title = "Suspicious App Reports",
-        subtitle = "Apps frequently flagged by local analysis.",
+        subtitle = "Apps frequently flagged by local and community analysis.",
         onBack = onBack,
     ) {
         if (reports.isEmpty()) {
@@ -2155,6 +2156,7 @@ fun SuspiciousAppReportScreen(
                             Text(report.appName, style = MaterialTheme.typography.titleSmall, color = UiTokens.TextPrimary)
                             Text(report.packageName, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
                             Text(report.topReason, style = MaterialTheme.typography.bodySmall, color = UiTokens.TextSecondary)
+                            Text("Source: ${report.source}", style = MaterialTheme.typography.bodySmall, color = UiTokens.TextMuted)
                         }
                         Text("${report.reportCount}", color = UiTokens.AccentBlueLight)
                     }

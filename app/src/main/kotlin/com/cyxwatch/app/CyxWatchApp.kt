@@ -2,7 +2,9 @@
 
 import android.app.Activity
 import com.cyxwatch.app.BuildConfig
+import android.Manifest
 import android.net.VpnService
+import android.os.Build
 import android.util.Log
 import android.view.WindowManager.LayoutParams.FLAG_SECURE
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -42,6 +44,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -78,6 +81,8 @@ import com.cyxwatch.app.data.inventory.SharedPrefsAppInventorySnapshotRepository
 import com.cyxwatch.app.data.network.SharedPrefsNetworkUsageTotalsRepository
 import com.cyxwatch.app.data.settings.RetentionSettingsRepository
 import com.cyxwatch.app.data.settings.LaunchGateSettingsRepository
+import com.cyxwatch.app.data.settings.UserInterfaceSettingsRepository
+import com.cyxwatch.app.data.settings.UserInterfaceSettingsState
 import com.cyxwatch.app.data.settings.SecureScreenSettingsRepository
 import com.cyxwatch.app.data.settings.VpnModeSettingsRepository
 import com.cyxwatch.app.data.settings.UsageAccessConsentRepository
@@ -111,6 +116,8 @@ import com.cyxwatch.app.platform.network.VpnTrafficTotals
 import com.cyxwatch.app.platform.notifications.CyxWatchNotifier
 import com.cyxwatch.app.platform.permissions.UsageAccessPermissionStateProvider
 import com.cyxwatch.app.runtime.RuntimeIntegrityGuard
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.core.content.ContextCompat
 import com.cyxwatch.app.platform.permissions.hasUsageAccess as hasUsageAccessGranted
 import com.cyxwatch.app.platform.permissions.openUsageAccessSettingsIntent
 import com.cyxwatch.app.platform.usage.AndroidUsageEventCollector
@@ -159,6 +166,7 @@ fun CyxWatchApp(
     val vpnModeSettingsRepository = remember { VpnModeSettingsRepository(context) }
     val retentionSettingsRepository = remember { RetentionSettingsRepository(context) }
     val secureScreenSettingsRepository = remember { SecureScreenSettingsRepository(context) }
+    val userInterfaceSettingsRepository = remember { UserInterfaceSettingsRepository(context) }
     val usagePermissionStateProvider = remember { UsageAccessPermissionStateProvider(context) }
     val usageAccessCollectorUseCase = remember {
         CollectUsageEventsUseCase(
@@ -210,6 +218,7 @@ fun CyxWatchApp(
     var retentionStatus by remember { mutableStateOf("Retention window: ${retentionSettings.retentionDays} days.") }
     var vpnModeState by remember { mutableStateOf(vpnModeSettingsRepository.readState()) }
     var secureScreenSettingsState by remember { mutableStateOf(secureScreenSettingsRepository.readState()) }
+    var userInterfaceSettingsState by remember { mutableStateOf(userInterfaceSettingsRepository.readState()) }
     var runtimeIntegrityBlockMessage by remember { mutableStateOf<String?>(null) }
     val runtimeIntegrityGuard = remember {
         RuntimeIntegrityGuard.create(
@@ -231,10 +240,10 @@ fun CyxWatchApp(
     var monitorTabFilter by remember { mutableStateOf(MonitorStatusFilter.All) }
     var reportsPeriod by remember { mutableStateOf(ReportsPeriod.Daily) }
     var isRealtimeProtectionEnabled by remember { mutableStateOf(true) }
-    var isNotificationsEnabled by remember { mutableStateOf(true) }
-    var pendingThemeSelection by remember { mutableStateOf("Dark") }
-    var pendingLanguageSelection by remember { mutableStateOf("English") }
-    var scanScheduleSelection by remember { mutableStateOf("Every 24h") }
+    var isNotificationsEnabled by remember { mutableStateOf(userInterfaceSettingsState.notificationsEnabled) }
+    var pendingThemeSelection by remember { mutableStateOf(userInterfaceSettingsState.theme) }
+    var pendingLanguageSelection by remember { mutableStateOf(userInterfaceSettingsState.language) }
+    var scanScheduleSelection by remember { mutableStateOf(userInterfaceSettingsState.scanSchedule) }
     var settingsSubScreen by remember { mutableStateOf<SettingsSubScreen?>(null) }
     var ignoredPackages by remember { mutableStateOf(setOf<String>()) }
     var pendingRealtimeDisable by remember { mutableStateOf(false) }
@@ -344,6 +353,58 @@ fun CyxWatchApp(
             completedAtEpochMs = now,
         )
         launchGateSettingsRepository.markCompleted(openedPrivacyControlsFromGate, now)
+    }
+
+    fun hasPostNotificationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return true
+        }
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    fun persistInterfaceSettings(state: UserInterfaceSettingsState) {
+        userInterfaceSettingsState = state
+        pendingThemeSelection = state.theme
+        pendingLanguageSelection = state.language
+        scanScheduleSelection = state.scanSchedule
+        isNotificationsEnabled = state.notificationsEnabled
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        if (isGranted) {
+            persistInterfaceSettings(userInterfaceSettingsRepository.setNotificationsEnabled(true))
+        } else {
+            persistInterfaceSettings(userInterfaceSettingsRepository.setNotificationsEnabled(false))
+        }
+    }
+
+    fun setThemeSelection(theme: String) {
+        persistInterfaceSettings(userInterfaceSettingsRepository.setTheme(theme))
+    }
+
+    fun setLanguageSelection(language: String) {
+        persistInterfaceSettings(userInterfaceSettingsRepository.setLanguage(language))
+    }
+
+    fun setScanScheduleSelection(schedule: String) {
+        persistInterfaceSettings(userInterfaceSettingsRepository.setScanSchedule(schedule))
+    }
+
+    fun setNotificationsSelection(enabled: Boolean) {
+        if (!enabled) {
+            persistInterfaceSettings(userInterfaceSettingsRepository.setNotificationsEnabled(false))
+            return
+        }
+        if (hasPostNotificationPermission()) {
+            persistInterfaceSettings(userInterfaceSettingsRepository.setNotificationsEnabled(true))
+        } else {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     LaunchedEffect(hasUsageAccess, launchGateState.hasCompletedLaunchGate) {
@@ -578,6 +639,11 @@ fun CyxWatchApp(
         selectedProfile != null ||
         selectedDailySummary != null
     )
+    val isDarkThemePreferred = when (pendingThemeSelection.lowercase()) {
+        "light" -> false
+        "system" -> isSystemInDarkTheme()
+        else -> true
+    }
     val activity = LocalContext.current as? Activity
 
     LaunchedEffect(activity, isProtectedEvidenceScreen) {
@@ -595,7 +661,30 @@ fun CyxWatchApp(
         }
     }
 
-    val appColorScheme = darkColorScheme(
+    val appColorScheme = if (!isDarkThemePreferred) {
+        lightColorScheme(
+            primary = Color(0xFF1F4ED8),
+            onPrimary = Color(0xFFFFFFFF),
+            primaryContainer = Color(0xFFDCE8FF),
+            onPrimaryContainer = Color(0xFF0E2B69),
+            secondary = Color(0xFF2862D9),
+            onSecondary = Color(0xFFFFFFFF),
+            tertiary = Color(0xFF0D8C74),
+            onTertiary = Color(0xFFFFFFFF),
+            background = Color(0xFFF6F8FE),
+            onBackground = Color(0xFF111827),
+            surface = Color(0xFFFFFFFF),
+            onSurface = Color(0xFF1F2937),
+            surfaceVariant = Color(0xFFEAF0FC),
+            onSurfaceVariant = Color(0xFF334155),
+            error = Color(0xFFDC2626),
+            onError = Color(0xFFFFFFFF),
+            outline = Color(0xFFCBD5E1),
+            errorContainer = Color(0xFFFED7AA),
+            onErrorContainer = Color(0xFF7C2D12),
+        )
+    } else {
+        darkColorScheme(
         primary = Color(0xFF4E8BFF),
         onPrimary = Color(0xFFFFFFFF),
         primaryContainer = Color(0xFF18345F),
@@ -613,10 +702,11 @@ fun CyxWatchApp(
         error = Color(0xFFFF6B6B),
         onError = Color(0xFFFFFFFF),
         outline = Color(0xFF7F8FB2),
-    )
+        )
+    }
 
     val visibleActiveAlerts = activeAlerts.filterNot { ignoredPackages.contains(it.packageName) }
-    val suspiciousAppSummaries = activeAlerts
+    val localSuspiciousAppSummaries = activeAlerts
         .groupBy { it.packageName }
         .mapNotNull { (packageName, alerts) ->
             if (alerts.size < 2) {
@@ -636,10 +726,39 @@ fun CyxWatchApp(
                     .withZone(ZoneId.systemDefault())
                     .format(latestAlert.triggeredAt),
                 topReason = topReason.name.lowercase().replace('_', ' '),
+                source = "Local observations",
             )
         }
-        .sortedWith(compareByDescending<SuspiciousAppSummary> { it.reportCount }.thenByDescending { it.latestTimestampLabel })
-        .take(10)
+    val publicSuspiciousAppSeed = listOf(
+        SuspiciousAppSummary(
+            packageName = "com.example.camera.logger",
+            appName = "Camera Logger",
+            reportCount = 17,
+            latestTimestampLabel = "Community",
+            topReason = "continuous background camera access",
+            source = "Community",
+        ),
+        SuspiciousAppSummary(
+            packageName = "com.example.call.interceptor",
+            appName = "Call Interceptor",
+            reportCount = 11,
+            latestTimestampLabel = "Community",
+            topReason = "call-state monitoring patterns",
+            source = "Community",
+        ),
+        SuspiciousAppSummary(
+            packageName = "com.example.contacts.grabber",
+            appName = "Contacts Grabber",
+            reportCount = 9,
+            latestTimestampLabel = "Community",
+            topReason = "sudden contact list access",
+            source = "Community",
+        ),
+    )
+    val suspiciousAppSummaries = combineSuspiciousAppSummaries(
+        localSuspiciousAppSummaries = localSuspiciousAppSummaries,
+        communitySuspiciousAppSummaries = publicSuspiciousAppSeed,
+    )
 
     val showPrimaryTabs = hasUsageAccess &&
         selectedProfile == null &&
@@ -992,7 +1111,7 @@ fun CyxWatchApp(
                                         }
                                     },
                                     onNotificationsToggled = {
-                                        isNotificationsEnabled = it
+                                        setNotificationsSelection(it)
                                     },
                                     onIgnoreList = {
                                         settingsSubScreen = SettingsSubScreen.IgnoreList
@@ -1042,17 +1161,17 @@ fun CyxWatchApp(
                                 SettingsSubScreen.ScanSchedule -> ScanScheduleSettingsScreen(
                                     selectedSchedule = scanScheduleSelection,
                                     onBack = onBackToSettings,
-                                    onSelectionChanged = { scanScheduleSelection = it },
+                                    onSelectionChanged = { setScanScheduleSelection(it) },
                                 )
                                 SettingsSubScreen.Theme -> ThemeSettingsScreen(
                                     selectedTheme = pendingThemeSelection,
                                     onBack = onBackToSettings,
-                                    onSelectionChanged = { pendingThemeSelection = it },
+                                    onSelectionChanged = { theme -> setThemeSelection(theme) },
                                 )
                                 SettingsSubScreen.Language -> LanguageSettingsScreen(
                                     selectedLanguage = pendingLanguageSelection,
                                     onBack = onBackToSettings,
-                                    onSelectionChanged = { pendingLanguageSelection = it },
+                                    onSelectionChanged = { language -> setLanguageSelection(language) },
                                 )
                                 SettingsSubScreen.DataUsage -> DataUsageSettingsScreen(
                                     hasUsageAccess = hasUsageAccess,
@@ -1277,6 +1396,33 @@ private fun formatTimestamp(timestamp: Long?): String {
     } catch (_: Exception) {
         ""
     }
+}
+
+private fun combineSuspiciousAppSummaries(
+    localSuspiciousAppSummaries: List<SuspiciousAppSummary>,
+    communitySuspiciousAppSummaries: List<SuspiciousAppSummary>,
+): List<SuspiciousAppSummary> {
+    val merged = mutableMapOf<String, SuspiciousAppSummary>()
+    localSuspiciousAppSummaries.forEach { localSummary ->
+        merged[localSummary.packageName.lowercase()] = localSummary
+    }
+    communitySuspiciousAppSummaries.forEach { communitySummary ->
+        val key = communitySummary.packageName.lowercase()
+        merged[key]?.let { existing ->
+            merged[key] = existing.copy(
+                reportCount = existing.reportCount + communitySummary.reportCount,
+                source = "Local + Community",
+            )
+        } ?: run {
+            merged[key] = communitySummary
+        }
+    }
+    return merged.values
+        .sortedWith(
+            compareByDescending<SuspiciousAppSummary> { it.reportCount }
+                .thenByDescending { it.latestTimestampLabel },
+        )
+        .take(10)
 }
 
 @Composable
