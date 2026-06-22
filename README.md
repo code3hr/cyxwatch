@@ -120,3 +120,38 @@ Example hard recovery:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-cyxwatch.ps1 -Mode ci -StopJava -CleanBuildState
 ```
+
+## Run On Device (Debug Smoke Test)
+
+Use `scripts/run-debug-on-device.ps1` after you have built at least once:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+powershell -ExecutionPolicy Bypass -File scripts\run-debug-on-device.ps1
+```
+
+The script:
+
+- Builds `app-debug.apk` (unless `-NoBuild`).
+- Installs it on one connected Android device (`-DeviceId` to pick one if multiple).
+- Launches `com.cyxwatch.app/.MainActivity`.
+- Starts `adb logcat` filtered on `CyxWatch` and shows recent logs only when `-LogLineCount` > 0.
+
+Examples:
+
+```powershell
+# full run: build, install, launch, live logs
+powershell -ExecutionPolicy Bypass -File scripts\run-debug-on-device.ps1
+
+# use existing build, install and launch to one specific device
+powershell -ExecutionPolicy Bypass -File scripts\run-debug-on-device.ps1 -NoBuild -DeviceId emulator-5554
+
+# capture latest 80 logcat lines only
+powershell -ExecutionPolicy Bypass -File scripts\run-debug-on-device.ps1 -NoLaunch -LogLineCount 80
+```
+
+Requirements:
+
+- Android SDK `adb` available in `PATH`.
+- A phone/emulator with USB debugging enabled and authorized.
+- The app package uses `com.cyxwatch.app`.
